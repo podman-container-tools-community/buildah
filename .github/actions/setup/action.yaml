@@ -15,7 +15,7 @@ runs:
     - name: Hide .build from git
       shell: bash
       run: |
-        printf '/.build/\n/dist/\n' >> .git/info/exclude
+        printf '/.build/\n/dist/\n/.zig-cache/\n' >> .git/info/exclude
         if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
           git status --short --untracked-files=all
           echo "::error::upstream checkout is not clean"
