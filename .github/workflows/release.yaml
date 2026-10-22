@@ -3,69 +3,51 @@ run-name: ${{ github.ref_name }}
 
 # Releases the upstream version named by the tag this workflow runs on: GitHub release
 # with binaries, signed deb/rpm packages, apt repository, SBOMs and cosign signature,
-# images on ghcr.io, and build provenance.
+# images on ghcr.io (hack/build-image.sh), and build provenance.
 # test.yaml (build and functional tests) has to pass first.
 #
 # Started by sync.yaml, or by hand for an existing tag:
 #   gh workflow run release.yaml --ref v1.46.0
-#
-# With the images input, run on main, it rebuilds, pushes and signs only the images of an
-# existing release with the current Dockerfile, e.g. after a base image change or an
-# Alpine package CVE:
-#   gh workflow run release.yaml --ref main -f images=v1.46.0
-# Tags point at the commit that was current when they were created, so a run on the tag
-# would use that commit's Dockerfile. The vX.Y.Z-immutable tag is not rebuilt.
+# Images of existing releases are rebuilt by rebuild.yaml.
 
 on:
   workflow_dispatch:
-    inputs:
-      images:
-        description: Only rebuild the images of this existing release, e.g. v1.46.0 (run on main)
-        type: string
-        default: ""
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.images || github.ref_name }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   test:
     uses: ./.github/workflows/test.yaml
     with:
-      version: ${{ inputs.images || github.ref_name }}
+      version: ${{ github.ref_name }}
 
   release:
     needs: test
     runs-on: ubuntu-26.04
-    name: release (${{ inputs.images || github.ref_name }})
+    name: release (${{ github.ref_name }})
     permissions:
       contents: write # GitHub release
       packages: write # ghcr.io
       id-token: write # cosign keyless signing and attestations
       attestations: write
     env:
-      VERSION: ${{ inputs.images || github.ref_name }}
-      IMAGES_ONLY: ${{ inputs.images != '' }}
+      VERSION: ${{ github.ref_name }}
     steps:
       - name: Check ref
+        if: github.ref_type != 'tag'
         run: |
-          if [[ "${IMAGES_ONLY}" == "false" && "${GITHUB_REF_TYPE}" != "tag" ]]; then
-            echo "::error::release.yaml must run on a tag (--ref <tag>), not ${GITHUB_REF}"
-            exit 1
-          fi
-          if [[ "${IMAGES_ONLY}" == "true" && "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            echo "::error::images rebuilds run on a branch (--ref main), not ${GITHUB_REF}"
-            exit 1
-          fi
+          echo "::error::release.yaml must run on a tag (--ref <tag>), not ${GITHUB_REF}"
+          exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: podman-container-tools/buildah
-          ref: refs/tags/${{ env.VERSION }}
-          fetch-depth: 0
+          ref: ${{ github.ref }}
           persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -75,29 +57,7 @@ jobs:
 
       - uses: ./.build/.github/actions/setup
         with:
-          version: ${{ env.VERSION }}
-
-      # Rebuilt images have to contain the released binaries: build them with the Go
-      # version of the release, and compare checksums after the build. zig and libseccomp
-      # come from the current setup action; a different version of either changes the
-      # binary and fails the comparison, so the rebuild has to run from a commit that
-      # still pins the release's versions.
-      - name: Download release checksums
-        id: release
-        if: env.IMAGES_ONLY == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release download "${VERSION}" --repo "${GITHUB_REPOSITORY}" \
-            --pattern checksums.txt --pattern buildah-linux-amd64 --dir "${RUNNER_TEMP}/release"
-          go_version="$(go version "${RUNNER_TEMP}/release/buildah-linux-amd64" | awk '{print $2}')"
-          echo "go-version=${go_version#go}" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        if: env.IMAGES_ONLY == 'true'
-        with:
-          go-version: ${{ steps.release.outputs.go-version }}
-          cache: false
+          version: ${{ github.ref_name }}
 
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
@@ -111,9 +71,8 @@ jobs:
 
       # Floating tags: latest and vX follow the newest upstream release, vX.Y the newest
       # release of that minor. The newest by version, not upstream's GitHub "latest"
-      # flag: buildah maintains several minors at once, so that flag moves to a backport
-      # release (v1.41.x after v1.46.0) unless upstream resets it, and with it latest,
-      # vX, make_latest and the apt repository.
+      # flag: that flag moves to a backport release of an older minor unless upstream
+      # resets it, and with it latest, vX, make_latest and the apt repository.
       - name: Check floating tags
         env:
           GH_TOKEN: ${{ github.token }}
@@ -129,7 +88,6 @@ jobs:
 
       # Key for the deb/rpm signatures and the apt repository (packaging/gpg.asc).
       - name: Import GPG key
-        if: env.IMAGES_ONLY == 'false'
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -140,32 +98,25 @@ jobs:
           echo "GPG_KEY_PATH=${key}" >> "$GITHUB_ENV"
 
       - name: Release
-        if: env.IMAGES_ONLY == 'false'
         run: goreleaser release --config "${GORELEASER_CONFIG}" --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
           NFPM_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 
-      # IMAGES_ONLY disables the GitHub release and the -immutable tag in .goreleaser.yaml.
-      # Build and compare first; dockers_v2 pushes while it builds, so a mismatch found
-      # after a full run would already have replaced the published tags.
-      - name: Rebuild images
-        if: env.IMAGES_ONLY == 'true'
+      # From the binaries goreleaser just built, with the vX.Y.Z-immutable tag only the
+      # release pushes. Annotated with the upstream commit of the checkout.
+      - name: Build and push images
         run: |
-          goreleaser release --config "${GORELEASER_CONFIG}" --clean --skip=docker,publish,sign,sbom,nfpm
-          binaries=' buildah-linux-(amd64|arm64)$'
-          diff <(grep -E "${binaries}" "${RUNNER_TEMP}/release/checksums.txt") <(grep -E "${binaries}" dist/checksums.txt)
-          goreleaser release --config "${GORELEASER_CONFIG}" --clean --skip=nfpm
+          REVISION="$(git rev-parse HEAD)" CREATED="$(git log -1 --format=%cd --date=format-local:%Y-%m-%dT%H:%M:%SZ)" \
+            IMMUTABLE=true .build/hack/build-image.sh --push dist "ghcr.io/${GITHUB_REPOSITORY}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+          TZ: UTC
 
       # Flat apt repository in the release assets; packaging/apt/buildah.sources points at
       # releases/latest/download, which follows the newest upstream release. goreleaser
       # leaves the release as a draft, so it is published only with these files.
       - name: Add apt repository
-        if: env.IMAGES_ONLY == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
@@ -184,22 +135,20 @@ jobs:
           }
           sign --clearsign -o InRelease Release
           sign --armor --detach-sign -o Release.gpg Release
-          gh release upload "${GITHUB_REF_NAME}" Packages Packages.xz Release InRelease Release.gpg \
+          gh release upload "${VERSION}" Packages Packages.xz Release InRelease Release.gpg \
             --repo "${GITHUB_REPOSITORY}" --clobber
 
       - name: Publish release
-        if: env.IMAGES_ONLY == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest="${IS_LATEST}"
+        run: gh release edit "${VERSION}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest="${IS_LATEST}"
 
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        if: env.IMAGES_ONLY == 'false'
         with:
           subject-checksums: dist/checksums.txt
 
       - name: Remove GPG key
-        if: always() && env.IMAGES_ONLY == 'false'
+        if: always()
         run: |
           rm -f "${RUNNER_TEMP}/gpg-private.asc"
           gpgconf --kill gpg-agent
