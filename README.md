@@ -69,7 +69,7 @@ The deb and rpm packages and the apt repository are signed with the GPG key in
 
 ```sh
 docker run --rm --privileged -v "$PWD:/src" ghcr.io/podman-container-tools-community/buildah:latest \
-  build -t registry.example.com/app:latest /src
+  buildah build -t registry.example.com/app:latest /src
 ```
 
 The image runs buildah like upstream's image does: chroot isolation
@@ -77,24 +77,23 @@ The image runs buildah like upstream's image does: chroot isolation
 ([`packaging/image/containers.conf`](packaging/image/containers.conf)), and
 `/var/lib/containers` and `/var/tmp` as volumes, because overlay cannot be stacked on
 the container's own overlay. It contains containers-common's default `policy.json` (accept
-everything) and no `registries.conf`, so image names have to be fully qualified.
+everything), and its `registries.conf` resolves short names such as `alpine` on Docker Hub.
+Like upstream's image, it has no entrypoint, so commands start with `buildah`.
 
-The image is Alpine with the static binary, `git` (build contexts from Git URLs),
-`newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's `netavark` and `crun`. With
-`-e BUILDAH_ISOLATION=oci`, a privileged container can use OCI isolation, with host
-networking only: Alpine's netavark does not understand every network option buildah
-sends. Alpine's own buildah and containers-common packages are not installed; `apk add`
-other tools as needed. For rootless
-builds, run as the `build` user (UID 1000, subordinate IDs 100000-165535, storage in the
-`/home/build/.local/share/containers` volume):
+The image is Alpine with the static binary, `bash`, `curl`, `tzdata`, `git` (build
+contexts from Git URLs), `newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's
+`netavark` and `crun`. With `-e BUILDAH_ISOLATION=oci`, a privileged container can use
+OCI isolation with host networking, the image's default; private networks need a newer
+netavark than Alpine's with recent buildah releases. Alpine's own buildah and
+containers-common packages are not installed (`apk add buildah` would replace the
+static binary); `apk add` other tools as needed. For rootless builds, run as the `build`
+user (UID 1000, subordinate IDs 1-999 and 1001-65535 like upstream's image, storage in
+the `/home/build/.local/share/containers` volume):
 
 ```sh
 docker run --rm --privileged --user build -v "$PWD:/src" \
-  ghcr.io/podman-container-tools-community/buildah:latest build -t registry.example.com/app:latest /src
+  ghcr.io/podman-container-tools-community/buildah:latest buildah build -t registry.example.com/app:latest /src
 ```
-
-The entrypoint is `buildah`; CI systems that run a shell script in the image, such as
-GitLab CI, need `entrypoint: [""]`.
 
 ## Trust model
 
@@ -279,7 +278,7 @@ this means:
 - **No default configuration.** The binary does not install `/etc/containers`. The
   packages recommend the distribution's package that owns it
   (`golang-github-containers-common` on Debian and Ubuntu, `containers-common` on rpm
-  distributions); the image ships `policy.json` and `containers.conf`.
+  distributions); the image ships `policy.json`, `containers.conf` and `registries.conf`.
 - **Linux only**, `amd64` and `arm64`. The arm64 binary is cross-compiled and tested on
   arm64 runners.
 
@@ -322,6 +321,6 @@ hack/image-test.sh                   image tests for a built binary
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
-packaging/image/                     policy.json and containers.conf for the image
+packaging/image/                     policy.json, containers.conf and registries.conf for the image
 renovate.json                        base image, action and libseccomp updates
 ```

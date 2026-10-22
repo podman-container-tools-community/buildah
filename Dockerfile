@@ -29,15 +29,17 @@ touch /marker
 # allowed. netavark: recent buildah releases refuse to create containers without it, even
 # with host networking, which the image uses by default (packaging/image/containers.conf).
 # crun: OCI runtime for --isolation oci; chroot stays the default (BUILDAH_ISOLATION).
-apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs netavark crun
+# bash, curl, tzdata: scripts written for upstream's Fedora-based image.
+apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add \
+  git shadow-subids fuse-overlayfs netavark crun bash curl tzdata
 
-# Unprivileged user for rootless builds, with a subordinate ID range and its own
-# storage volume.
-echo 'build:x:1000:1000:build:/home/build:/bin/sh' >> /rootfs/etc/passwd
+# Unprivileged user for rootless builds, with its own storage volume. The subordinate ID
+# ranges are upstream's: they stay below 65536, so they also fit into a container that
+# only has 65536 IDs mapped (rootless Docker or podman, user namespace remapping).
+echo 'build:x:1000:1000:build:/home/build:/bin/bash' >> /rootfs/etc/passwd
 echo 'build:x:1000:' >> /rootfs/etc/group
 echo 'build:!::0:::::' >> /rootfs/etc/shadow
-echo 'build:100000:65536' >> /rootfs/etc/subuid
-echo 'build:100000:65536' >> /rootfs/etc/subgid
+printf 'root:1:65535\nbuild:1:999\nbuild:1001:64535\n' | tee -a /rootfs/etc/subuid >> /rootfs/etc/subgid
 mkdir -p /rootfs/home/build/.local/share/containers
 chown -R 1000:1000 /rootfs/home/build
 
@@ -52,9 +54,12 @@ FROM base
 ARG TARGETPLATFORM
 ENV BUILDAH_ISOLATION=chroot
 COPY --from=delta /delta/ /
-COPY .build/packaging/image/policy.json .build/packaging/image/containers.conf /etc/containers/
+COPY .build/packaging/image/policy.json .build/packaging/image/containers.conf \
+  .build/packaging/image/registries.conf /etc/containers/
 COPY $TARGETPLATFORM/buildah /usr/bin/buildah
 # Storage and buildah's temporary overlays (build context) need a file system that is
 # not the image's overlay.
 VOLUME ["/var/lib/containers", "/var/tmp", "/home/build/.local/share/containers"]
-ENTRYPOINT ["/usr/bin/buildah"]
+# No entrypoint, like upstream's image: `docker run <image> buildah ...` and CI systems
+# that run a shell script in the image both work.
+CMD ["/bin/bash"]

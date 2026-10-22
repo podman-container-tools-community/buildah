@@ -174,6 +174,7 @@ dockers_v2:
     extra_files:
       - .build/packaging/image/policy.json
       - .build/packaging/image/containers.conf
+      - .build/packaging/image/registries.conf
     platforms:
       - linux/amd64
       - linux/arm64
