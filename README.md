@@ -35,7 +35,7 @@ fills that gap with:
 
 ### apt (Debian, Ubuntu)
 
-The apt repository follows upstream's latest release. It needs apt 2.3.10 or newer
+The apt repository follows the newest upstream release. It needs apt 2.3.10 or newer
 (Debian 12, Ubuntu 22.04 and later) for the inline key in the sources file:
 
 ```sh
@@ -52,9 +52,12 @@ The packages use epoch 3, so they stay installed when the distribution ships its
 buildah update. To go back to the distribution's package, remove the source and run
 `sudo apt install --allow-downgrades buildah=<version>`.
 
-The package recommends `netavark` (see [Limitations](#limitations)), an OCI runtime
-(`crun` or `runc`), `uidmap` and the distribution's package with `/etc/containers`.
-Ubuntu 22.04 has no netavark package.
+The package depends on the distribution's package with `/etc/containers`
+(`golang-github-containers-common` or `containers-common`), because buildah refuses to
+pull without its `policy.json`. It recommends `netavark` (see
+[Limitations](#limitations)), an OCI runtime (`crun` or `runc`), `uidmap` and
+`fuse-overlayfs`. Ubuntu 22.04 has no netavark package, so buildah 1.44 and newer cannot
+create containers there.
 
 ### rpm (Fedora, RHEL, openSUSE)
 
@@ -147,10 +150,13 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
 1. [`sync.yaml`](.github/workflows/sync.yaml) runs every 6 hours, on every push to `main`
    and on demand. For every upstream release that has no tag here yet, it creates the tag
    on the current commit and dispatches [`release.yaml`](.github/workflows/release.yaml)
-   on it. It only runs once the repository variable `RELEASES_ENABLED` is `true`.
+   on it. It only runs once the repository variable `RELEASES_ENABLED` is `true`, and
+   starts at most `MAX_RELEASES_PER_RUN` releases per run (a repository variable, default
+   10), newest first; the rest follow with the next runs.
 2. `release.yaml` builds that tag: GitHub release, images on `ghcr.io`, signatures and
-   attestations. Image tags: `vX.Y.Z` always, `vX.Y` for the newest release of a minor,
-   `vX` and `latest` for upstream's latest release.
+   attestations. Image tags: `vX.Y.Z` and `vX.Y.Z-immutable` always, `vX.Y` for the newest release of a minor,
+   `vX` and `latest` for the newest upstream release by version (not upstream's GitHub
+   "latest" flag, which a backport release of an older minor can take).
 3. Before anything is published, [`test.yaml`](.github/workflows/test.yaml) builds the
    release and runs the [bats](https://github.com/bats-core/bats-core) tests in
    [`test/functional.bats`](test/functional.bats) through
@@ -170,6 +176,17 @@ A release can also be started by hand for an existing tag:
 
 ```sh
 gh workflow run release.yaml --ref v1.46.0
+```
+
+The image's Alpine packages are not pinned, so a base image update or an Alpine package
+fix needs new images without a new release. `release.yaml` run on `main` with the
+`images` input rebuilds, pushes and signs only the images of an existing release with
+the current `Dockerfile`, after checking that the rebuilt binaries match the released
+checksums. All tags of that release move except `vX.Y.Z-immutable`, which keeps the
+digest of the original release:
+
+```sh
+gh workflow run release.yaml --ref main -f images=v1.46.0
 ```
 
 ## How it works
@@ -198,7 +215,9 @@ gh workflow run release.yaml --ref v1.46.0
   are listed in [`.github/actions/setup`](.github/actions/setup/action.yaml): 1.44.x
   uses Go 1.26. The Go version used is recorded in each binary (`go version -m`).
 - Build tags follow upstream's Makefile for what works in a static binary: `seccomp`,
-  `apparmor`, `containers_image_openpgp` (pure-Go OpenPGP instead of gpgme),
+  `apparmor`, `systemd` (pure Go in buildah: it only makes `--cgroup-manager` default to
+  `systemd` on hosts that run systemd, as the distributions' builds do),
+  `containers_image_openpgp` (pure-Go OpenPGP instead of gpgme),
   `exclude_graphdriver_btrfs` and `exclude_graphdriver_devicemapper` (needed for older
   releases).
 - The upstream commit and build time are passed with `-X main.GitCommit` and
@@ -287,7 +306,6 @@ this means:
 - **No NSS.** User lookups read `/etc/passwd` and `/etc/group` only, and name
   resolution uses musl's resolver (`/etc/hosts` and DNS): no LDAP users, mDNS
   (`.local`) or systemd-resolved specific behaviour.
-- **No journald.** Built without the `systemd` tag.
 - **No default configuration.** The binary does not install `/etc/containers`. The
   packages recommend the distribution's package that owns it
   (`golang-github-containers-common` on Debian and Ubuntu, `containers-common` on rpm
