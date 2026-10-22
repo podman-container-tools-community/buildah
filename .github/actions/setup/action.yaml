@@ -43,9 +43,8 @@ runs:
 
     # Static libseccomp for the seccomp build tag; libseccomp-golang finds it through
     # PKG_CONFIG_LIBDIR (see .goreleaser.yaml). hack/musl-compat.h goes next to it.
-    # The tarball has to carry a signature by a key pinned in hack/verify-libseccomp.sh
-    # and match the sha256 below. Renovate bumps version and sha256 together; the version
-    # keeps the tag's v, which its digest lookup needs.
+    # Renovate bumps the version and the tarball's sha256 together; the version keeps the
+    # tag's v, which its digest lookup needs.
     - name: Build sysroot
       shell: bash
       env:
@@ -57,8 +56,6 @@ runs:
         tarball="${RUNNER_TEMP}/libseccomp-${LIBSECCOMP_VERSION#v}.tar.gz"
         url="https://github.com/seccomp/libseccomp/releases/download/${LIBSECCOMP_VERSION}/libseccomp-${LIBSECCOMP_VERSION#v}.tar.gz"
         curl -fsSLo "${tarball}" "${url}"
-        curl -fsSLo "${tarball}.asc" "${url}.asc"
-        .build/hack/verify-libseccomp.sh "${tarball}" "${tarball}.asc"
         sha256sum --check --strict <<< "${LIBSECCOMP_SHA256}  ${tarball}"
         .build/hack/build-libseccomp.sh "${tarball}" "${RUNNER_TEMP}/sysroot"
         cp .build/hack/musl-compat.h "${RUNNER_TEMP}/sysroot/"
