@@ -1,22 +1,65 @@
 # syntax=docker/dockerfile:1
 
+# Pinned by index digest so image builds stay reproducible; Renovate bumps it (both FROM
+# lines name the same image).
+FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS base
+
+# Everything that has to run happens here, on the build host's platform, so no emulation
+# is needed: apk installs the target architecture's packages into a copy of the target's
+# file system, without their scripts (only fuse-overlayfs has one, a modprobe). Only what
+# changed ends up in /delta, so the final image adds one layer on top of Alpine's.
+FROM --platform=$BUILDPLATFORM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS delta
+ARG TARGETARCH
+SHELL ["/bin/ash", "-euo", "pipefail", "-c"]
+# Versions come from the Alpine release the base image pins; apk cannot pin older ones,
+# because the repositories only keep the newest.
+# hadolint ignore=DL3018
+RUN apk add --no-cache findutils tar
+COPY --from=base / /rootfs/
+# hadolint ignore=DL3018
+RUN <<EOF
+case "${TARGETARCH}" in
+  amd64) arch=x86_64 ;;
+  arm64) arch=aarch64 ;;
+  *) echo "unsupported architecture ${TARGETARCH}" >&2; exit 1 ;;
+esac
+touch /marker
+# git: build contexts from Git URLs. shadow-subids: newuidmap and newgidmap (file
+# capabilities) for rootless. fuse-overlayfs: rootless overlay where the kernel's is not
+# allowed.
+apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs
+
+# Unprivileged user for rootless builds, with a subordinate ID range and its own
+# storage volume.
+echo 'build:x:1000:1000:build:/home/build:/bin/sh' >> /rootfs/etc/passwd
+echo 'build:x:1000:' >> /rootfs/etc/group
+echo 'build:!::0:::::' >> /rootfs/etc/shadow
+echo 'build:100000:65536' >> /rootfs/etc/subuid
+echo 'build:100000:65536' >> /rootfs/etc/subgid
+mkdir -p /rootfs/home/build/.local/share/containers
+chown -R 1000:1000 /rootfs/home/build
+
 # Recent buildah releases refuse to create containers unless a netavark binary exists,
 # even with host networking, which the image always uses (packaging/image/containers.conf).
 # The link only satisfies that check; if anything runs it, buildah fails on the unknown
-# arguments. This stage runs on the build host's platform, so no emulation is needed.
-FROM --platform=$BUILDPLATFORM gcr.io/distroless/static-debian13:debug@sha256:11c839f18a0d7b91b093cda53a5d4cee84f23ec450a6f6e1bf17ab12bf296333 AS links
-SHELL ["/busybox/sh", "-c"]
-RUN mkdir -p /out/usr/libexec/podman && ln -s /usr/bin/buildah /out/usr/libexec/podman/netavark
+# arguments.
+mkdir -p /rootfs/usr/libexec/podman
+ln -s /usr/bin/buildah /rootfs/usr/libexec/podman/netavark
 
-# distroless/static brings CA certificates, /etc/passwd, /tmp and /var/tmp.
-# Pinned by index digest so image builds stay reproducible; Renovate bumps it.
-FROM gcr.io/distroless/static-debian13:latest@sha256:034df5c1737e8241f6ed6423a12e720ee0f6d6f088609ee172f98f6f2166ef5d
+# ctime cannot be preserved, so -cnewer finds exactly what the steps above wrote.
+mkdir /delta
+find /rootfs -mindepth 1 -cnewer /marker -printf '%P\0' |
+  tar -C /rootfs --null --no-recursion --xattrs --xattrs-include='security.*' -T - -cf - |
+  tar -C /delta --xattrs --xattrs-include='security.*' -xpf -
+EOF
+
+FROM base
 ARG TARGETPLATFORM
 ENV BUILDAH_ISOLATION=chroot
+COPY --from=delta /delta/ /
 COPY .build/packaging/image/policy.json .build/packaging/image/containers.conf /etc/containers/
-COPY --from=links /out/ /
 COPY $TARGETPLATFORM/buildah /usr/bin/buildah
 # Storage and buildah's temporary overlays (build context) need a file system that is
 # not the image's overlay.
-VOLUME ["/var/lib/containers", "/var/tmp"]
+VOLUME ["/var/lib/containers", "/var/tmp", "/home/build/.local/share/containers"]
 ENTRYPOINT ["/usr/bin/buildah"]

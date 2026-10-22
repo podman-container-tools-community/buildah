@@ -112,3 +112,6 @@ jobs:
 
       - name: Functional tests
         run: hack/functional-test.sh binaries/buildah-${{ matrix.arch }} localhost:5000
+
+      - name: Image tests
+        run: hack/image-test.sh binaries/buildah-${{ matrix.arch }}

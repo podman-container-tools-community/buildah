@@ -18,7 +18,7 @@ fills that gap with:
 - static binaries for `linux/amd64` and `linux/arm64` (more on request),
 - `.deb` and `.rpm` packages of the same binaries that replace the distribution's
   `buildah` package,
-- a multi-arch image based on `gcr.io/distroless/static-debian13`,
+- a multi-arch image based on Alpine, with a shell, git and rootless support,
 - every maintained upstream minor version (1.26 and newer), not only the newest one.
 
 ## Install
@@ -79,6 +79,20 @@ The image runs buildah like upstream's image does: chroot isolation
 the container's own overlay. It contains containers-common's default `policy.json` (accept
 everything) and no `registries.conf`, so image names have to be fully qualified.
 
+The image is Alpine with the static binary, `git` (build contexts from Git URLs),
+`newuidmap`/`newgidmap` and `fuse-overlayfs`. Alpine's own buildah, containers-common and
+netavark packages are not installed; `apk add` other tools as needed. For rootless
+builds, run as the `build` user (UID 1000, subordinate IDs 100000-165535, storage in the
+`/home/build/.local/share/containers` volume):
+
+```sh
+docker run --rm --privileged --user build -v "$PWD:/src" \
+  ghcr.io/podman-container-tools-community/buildah:latest build -t registry.example.com/app:latest /src
+```
+
+The entrypoint is `buildah`; CI systems that run a shell script in the image, such as
+GitLab CI, need `entrypoint: [""]`.
+
 ## Trust model
 
 This repository contains **only build configuration**. Nothing here can change what is
@@ -130,7 +144,9 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
    arm64 runners, as root and rootless: `from`, `run` and `build` with chroot and OCI
    isolation (checking that seccomp confines `RUN`), overlay storage, `commit`, `push`,
    `pull`, a multi-platform `build --manifest` with `manifest push --all`, and
-   `unshare`. Upstream's own integration tests are not run, because they need upstream's
+   `unshare`. [`hack/image-test.sh`](hack/image-test.sh) builds the image from the same
+   binary and runs `build` in it as root and as the rootless `build` user, and from a Git
+   URL. Upstream's own integration tests are not run, because they need upstream's
    CI VMs and, for older releases, registry content that changed since.
 4. [`ci.yaml`](.github/workflows/ci.yaml) runs `test.yaml` for the newest release of every
    minor version on pull requests.
@@ -294,13 +310,14 @@ This repository is checked out to `.build/` inside an upstream checkout.
 
 ```
 .goreleaser.yaml                     build, archive, package, image and signing configuration
-Dockerfile                           image (its one RUN runs on the build platform, no emulation)
+Dockerfile                           image (its RUN steps run on the build platform, no emulation)
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
 hack/musl-compat.h                   declarations older dependencies miss with current musl
 hack/functional-test.sh              functional tests for a built binary
+hack/image-test.sh                   image tests for a built binary
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser
-.github/workflows/test.yaml          build one release, run functional tests on amd64 and arm64
+.github/workflows/test.yaml          build one release, run functional and image tests on amd64 and arm64
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
