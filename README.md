@@ -308,7 +308,8 @@ this means:
 
 - **netavark is needed.** Recent buildah releases refuse to create any container
   without a `netavark` binary in the helper directories, even with `--network host`.
-  The packages recommend the distribution's netavark, and the image contains Alpine's.
+  The packages depend on the distribution's netavark (so they do not install on Ubuntu
+  22.04, which has none), and the image contains Alpine's.
 - **No GPG signing.** `buildah push --sign-by <fingerprint>` and `buildah commit
   --sign-by` fail. Verifying GPG signatures through `policy.json` (`signedBy` with
   `keyPath`) works. Sigstore signing and verification work fully.

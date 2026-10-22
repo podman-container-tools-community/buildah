@@ -102,7 +102,8 @@ archives:
 # a dependency, not a recommendation, because without its policy.json every pull fails
 # (and apt --no-install-recommends or dnf install_weak_deps=False would leave it out).
 # Releases since 1.44 refuse to create containers without netavark, even with host
-# networking; it is only recommended because Ubuntu 22.04 has no netavark package.
+# networking, so it is a dependency (Ubuntu 22.04, which has no netavark package, cannot
+# install these packages; Debian 12, Ubuntu 24.04 and the rpm distributions can).
 nfpms:
   - id: buildah
     ids: [buildah]
@@ -137,16 +138,16 @@ nfpms:
       deb:
         dependencies:
           - golang-github-containers-common | containers-common
-        recommends:
           - netavark
+        recommends:
           - crun | runc
           - uidmap
           - fuse-overlayfs
       rpm:
         dependencies:
           - containers-common
-        recommends:
           - netavark
+        recommends:
           - (crun or runc)
           - shadow-utils
           - fuse-overlayfs
