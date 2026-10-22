@@ -13,8 +13,10 @@
 #
 # GPG_KEY_PATH names the GPG private key that signs the deb and rpm packages; unset
 # means unsigned.
-# IS_LATEST=true marks upstream's latest release, IS_LATEST_MINOR=true the newest
+# IS_LATEST=true marks the newest upstream release, IS_LATEST_MINOR=true the newest
 # release of its minor version; they decide which floating image tags move.
+# IMAGES_ONLY=true skips the GitHub release and the -immutable image tag, for rebuilding
+# the images of an existing release (see release.yaml).
 version: 2
 
 project_name: buildah
@@ -61,15 +63,19 @@ builds:
     # Upstream's Makefile tags, minus the ones for libraries a static binary cannot use:
     # - seccomp: libseccomp, linked statically
     # - apparmor: pure Go, loads profiles with apparmor_parser
+    # - systemd: pure Go in buildah (containers/common only checks for /run/systemd/system;
+    #   nothing links libsystemd). Without it the default --cgroup-manager is cgroupfs
+    #   even on systemd hosts, unlike the distributions' builds.
     # - containers_image_openpgp: pure-Go OpenPGP instead of gpgme
     # - exclude_graphdriver_btrfs: btrfs driver needs libbtrfs headers
     # - exclude_graphdriver_devicemapper: devicemapper needs libdevmapper; upstream
     #   dropped the driver later, the tag is harmless for newer versions
-    # Not set: libsubid (loads NSS providers with dlopen), systemd (journald logging
-    # through libsystemd), libsqlite3 (go-sqlite3 uses its bundled SQLite instead).
+    # Not set: libsubid (loads NSS providers with dlopen), libsqlite3 (go-sqlite3 uses
+    # its bundled SQLite instead).
     tags:
       - seccomp
       - apparmor
+      - systemd
       - containers_image_openpgp
       - exclude_graphdriver_btrfs
       - exclude_graphdriver_devicemapper
@@ -97,8 +103,10 @@ archives:
 
 # Replace the distribution's buildah package. Epoch 3 sorts above every distribution
 # version (Fedora uses epoch 2, Debian none), so upgrades do not switch back.
-# Configuration in /etc/containers belongs to the distribution's containers-common.
-# Recent releases refuse to create containers without netavark, even with host
+# Configuration in /etc/containers belongs to the distribution's containers-common: it is
+# a dependency, not a recommendation, because without its policy.json every pull fails
+# (and apt --no-install-recommends or dnf install_weak_deps=False would leave it out).
+# Releases since 1.44 refuse to create containers without netavark, even with host
 # networking; it is only recommended because Ubuntu 22.04 has no netavark package.
 nfpms:
   - id: buildah
@@ -132,17 +140,21 @@ nfpms:
     # Debian and Ubuntu ship /etc/containers in golang-github-containers-common.
     overrides:
       deb:
+        dependencies:
+          - golang-github-containers-common | containers-common
         recommends:
           - netavark
-          - golang-github-containers-common | containers-common
           - crun | runc
           - uidmap
+          - fuse-overlayfs
       rpm:
+        dependencies:
+          - containers-common
         recommends:
           - netavark
-          - containers-common
           - (crun or runc)
           - shadow-utils
+          - fuse-overlayfs
     mtime: "{{ .CommitDate }}"
 
 checksum:
@@ -166,11 +178,14 @@ dockers_v2:
     ids: [buildah]
     images:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/buildah"
+    # vX.Y.Z-immutable is pushed once, with the release, and skipped by image rebuilds
+    # (IMAGES_ONLY), so its digest never changes; the other tags move with rebuilds.
     tags:
       - "{{ .Tag }}"
       - '{{ if eq .Env.IS_LATEST_MINOR "true" }}v{{ .Major }}.{{ .Minor }}{{ end }}'
       - '{{ if eq .Env.IS_LATEST "true" }}v{{ .Major }}{{ end }}'
       - '{{ if eq .Env.IS_LATEST "true" }}latest{{ end }}'
+      - '{{ if ne (envOrDefault "IMAGES_ONLY" "false") "true" }}{{ .Tag }}-immutable{{ end }}'
     dockerfile: .build/Dockerfile
     extra_files:
       - .build/packaging/image/policy.json
@@ -202,6 +217,7 @@ docker_signs:
       - --yes
 
 release:
+  disable: '{{ envOrDefault "IMAGES_ONLY" "false" }}'
   # Published by release.yaml once the apt repository files are uploaded.
   draft: true
   replace_existing_draft: true
@@ -215,7 +231,7 @@ release:
     Community-maintained static build of [buildah {{ .Tag }}](https://github.com/podman-container-tools/buildah/releases/tag/{{ .Tag }}).
     Not an official release of the buildah project.
 
-    Linked statically against musl (Alpine) with tags `seccomp apparmor containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper`.
+    Linked statically against musl (Alpine) with tags `seccomp apparmor systemd containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper`.
     Known limitations: no GPG signing (`--sign-by`), no libsubid (NSS subordinate IDs), no btrfs driver; netavark has to be installed.
     Sources were fetched from proxy.golang.org and verified against sum.golang.org;
     check with `go version -m buildah-linux-amd64`.
