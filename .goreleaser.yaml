@@ -33,8 +33,9 @@ builds:
     env:
       - CGO_ENABLED=1
       # go-sqlite3 uses the *64 functions such as pread64, which musl 1.2.4 only declares
-      # with _LARGEFILE64_SOURCE. CGO_COMPAT_CFLAGS: see .github/actions/setup.
-      - CGO_CFLAGS=-O2 -g -D_LARGEFILE64_SOURCE {{ envOrDefault "CGO_COMPAT_CFLAGS" "" }}
+      # with _LARGEFILE64_SOURCE. Before 1.36, hack/musl-compat.h (copied into the sysroot)
+      # declares basename().
+      - CGO_CFLAGS=-O2 -g -D_LARGEFILE64_SOURCE{{ if and (eq .Major 1) (lt .Minor 36) }} -include {{ .Env.SYSROOT }}/musl-compat.h{{ end }}
     goos:
       - linux
     goarch:

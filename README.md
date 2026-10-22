@@ -178,8 +178,8 @@ gh workflow run release.yaml --ref v1.46.0
   [`hack/build-libseccomp.sh`](hack/build-libseccomp.sh) builds with zig, too.
 - Dependencies use what musl 1.2.4 removed: go-sqlite3 the `*64` functions
   (`-D_LARGEFILE64_SOURCE`), and containers/storage before buildah 1.36 `basename()`
-  without including `libgen.h`, which is then included into every C file (see
-  [`.github/actions/setup`](.github/actions/setup/action.yaml)).
+  without including `libgen.h`, so for releases before 1.36
+  [`hack/musl-compat.h`](hack/musl-compat.h) is included into every C file.
 - Every release is built with the newest stable Go, not the version in upstream's
   `go.mod`. Exceptions for releases whose pinned dependencies break with the newest Go
   are listed in [`.github/actions/setup`](.github/actions/setup/action.yaml): 1.44.x
@@ -293,6 +293,7 @@ git clone https://github.com/podman-container-tools-community/buildah .build
 printf '/.build/\n/dist/\n' >> .git/info/exclude
 curl -fsSLo /tmp/libseccomp-2.6.0.tar.gz https://github.com/seccomp/libseccomp/releases/download/v2.6.0/libseccomp-2.6.0.tar.gz
 .build/hack/build-libseccomp.sh /tmp/libseccomp-2.6.0.tar.gz /tmp/sysroot
+cp .build/hack/musl-compat.h /tmp/sysroot/
 GITHUB_REPOSITORY_OWNER=podman-container-tools-community GITHUB_REPOSITORY=podman-container-tools-community/buildah \
 GITHUB_REPOSITORY_NAME=buildah IS_LATEST=false IS_LATEST_MINOR=false SYSROOT=/tmp/sysroot GOTOOLCHAIN=local \
   goreleaser release --config .build/.goreleaser.yaml --clean --skip=publish,sign,docker,sbom
@@ -312,6 +313,7 @@ This repository is checked out to `.build/` inside an upstream checkout.
 Dockerfile                           image (its RUN steps run on the build platform, no emulation)
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
+hack/musl-compat.h                   declares basename() for releases before 1.36
 hack/functional-test.sh              functional tests for a built binary
 hack/image-test.sh                   image tests for a built binary
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser

@@ -42,8 +42,9 @@ runs:
         use-cache: false
 
     # Static libseccomp for the seccomp build tag; libseccomp-golang finds it through
-    # PKG_CONFIG_LIBDIR (see .goreleaser.yaml). Renovate bumps the version, the sha256
-    # of the release tarball has to be updated in the same pull request.
+    # PKG_CONFIG_LIBDIR (see .goreleaser.yaml). hack/musl-compat.h goes next to it.
+    # Renovate bumps the version, the sha256 of the release tarball has to be updated in
+    # the same pull request.
     - name: Build sysroot
       shell: bash
       env:
@@ -56,20 +57,8 @@ runs:
         curl -fsSLo "${tarball}" "https://github.com/seccomp/libseccomp/releases/download/v${LIBSECCOMP_VERSION}/libseccomp-${LIBSECCOMP_VERSION}.tar.gz"
         sha256sum --check --strict <<< "${LIBSECCOMP_SHA256}  ${tarball}"
         .build/hack/build-libseccomp.sh "${tarball}" "${RUNNER_TEMP}/sysroot"
+        cp .build/hack/musl-compat.h "${RUNNER_TEMP}/sysroot/"
         echo "SYSROOT=${RUNNER_TEMP}/sysroot" >> "$GITHUB_ENV"
-
-    # musl 1.2.4 removed the basename() declaration from string.h. containers/storage
-    # before buildah 1.36 calls it in pkg/unshare/unshare.c without including libgen.h,
-    # and zig's clang refuses implicit declarations, so for those releases libgen.h is
-    # included into every C file. Assembly files get CGO_CFLAGS too, hence the guard.
-    - name: Work around missing libgen.h
-      shell: bash
-      run: | # zizmor: ignore[github-env] only a fixed path goes into GITHUB_ENV
-        if ! grep -q '<libgen.h>' vendor/*/*/storage/pkg/unshare/unshare.c vendor/*/storage/pkg/unshare/unshare.c 2>/dev/null; then
-          echo "::notice::containers/storage does not include libgen.h, including it into every C file"
-          printf '#ifndef __ASSEMBLER__\n#include <libgen.h>\n#endif\n' > "${RUNNER_TEMP}/libgen-compat.h"
-          echo "CGO_COMPAT_CFLAGS=-include ${RUNNER_TEMP}/libgen-compat.h" >> "$GITHUB_ENV"
-        fi
 
     # goreleaser's gomod.proxy refuses go.mod replace directives, which a module proxy
     # build would ignore. Such releases (1.26.0-1.26.9, 1.27.0-1.27.6, 1.28, 1.29.0-1.29.5,
