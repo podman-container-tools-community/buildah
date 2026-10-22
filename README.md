@@ -18,7 +18,7 @@ fills that gap with:
 - static binaries for `linux/amd64` and `linux/arm64` (more on request),
 - `.deb` and `.rpm` packages of the same binaries that replace the distribution's
   `buildah` package,
-- a multi-arch image based on Alpine, with a shell, git and rootless support,
+- a multi-arch image based on Alpine, with a shell, Git and rootless support,
 - every maintained upstream minor version (1.26 and newer), not only the newest one.
 
 ## Install
@@ -80,8 +80,8 @@ the container's own overlay. It contains containers-common's default `policy.jso
 everything) and no `registries.conf`, so image names have to be fully qualified.
 
 The image is Alpine with the static binary, `git` (build contexts from Git URLs),
-`newuidmap`/`newgidmap` and `fuse-overlayfs`. Alpine's own buildah, containers-common and
-netavark packages are not installed; `apk add` other tools as needed. For rootless
+`newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's `netavark`. Alpine's own buildah and
+containers-common packages are not installed; `apk add` other tools as needed. For rootless
 builds, run as the `build` user (UID 1000, subordinate IDs 100000-165535, storage in the
 `/home/build/.local/share/containers` volume):
 
@@ -174,9 +174,10 @@ gh workflow run release.yaml --ref v1.46.0
   cross-compiled on one amd64 runner with `zig cc` for musl and linked statically
   (`-linkmode external -extldflags '-static -s'`) against a static libseccomp that
   [`hack/build-libseccomp.sh`](hack/build-libseccomp.sh) builds with zig, too.
-- Older dependencies use what musl 1.2.4 removed: go-sqlite3 the `*64` functions
-  (`-D_LARGEFILE64_SOURCE`) and containers/storage `basename()` without `libgen.h`
-  ([`hack/musl-compat.h`](hack/musl-compat.h), included into every C file).
+- Dependencies use what musl 1.2.4 removed: go-sqlite3 the `*64` functions
+  (`-D_LARGEFILE64_SOURCE`), and containers/storage before buildah 1.36 `basename()`
+  without including `libgen.h`, which is then included into every C file (see
+  [`.github/actions/setup`](.github/actions/setup/action.yaml)).
 - Every release is built with the newest stable Go, not the version in upstream's
   `go.mod`. Exceptions for releases whose pinned dependencies break with the newest Go
   are listed in [`.github/actions/setup`](.github/actions/setup/action.yaml): 1.44.x
@@ -258,10 +259,7 @@ this means:
 
 - **netavark is needed.** Recent buildah releases refuse to create any container
   without a `netavark` binary in the helper directories, even with `--network host`.
-  The packages recommend the distribution's netavark. The image always uses host
-  networking and has a placeholder at `/usr/libexec/podman/netavark` (a link to
-  buildah) only to pass that check, so `--network` other than `host` does not work in
-  the image.
+  The packages recommend the distribution's netavark, and the image contains Alpine's.
 - **No GPG signing.** `buildah push --sign-by <fingerprint>` and `buildah commit
   --sign-by` fail. Verifying GPG signatures through `policy.json` (`signedBy` with
   `keyPath`) works. Sigstore signing and verification work fully.
@@ -293,7 +291,6 @@ git clone https://github.com/podman-container-tools-community/buildah .build
 printf '/.build/\n/dist/\n' >> .git/info/exclude
 curl -fsSLo /tmp/libseccomp-2.6.0.tar.gz https://github.com/seccomp/libseccomp/releases/download/v2.6.0/libseccomp-2.6.0.tar.gz
 .build/hack/build-libseccomp.sh /tmp/libseccomp-2.6.0.tar.gz /tmp/sysroot
-cp .build/hack/musl-compat.h /tmp/sysroot/
 GITHUB_REPOSITORY_OWNER=podman-container-tools-community GITHUB_REPOSITORY=podman-container-tools-community/buildah \
 GITHUB_REPOSITORY_NAME=buildah IS_LATEST=false IS_LATEST_MINOR=false SYSROOT=/tmp/sysroot GOTOOLCHAIN=local \
   goreleaser release --config .build/.goreleaser.yaml --clean --skip=publish,sign,docker,sbom
@@ -313,7 +310,6 @@ This repository is checked out to `.build/` inside an upstream checkout.
 Dockerfile                           image (its RUN steps run on the build platform, no emulation)
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
-hack/musl-compat.h                   declarations older dependencies miss with current musl
 hack/functional-test.sh              functional tests for a built binary
 hack/image-test.sh                   image tests for a built binary
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser

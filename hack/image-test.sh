@@ -40,8 +40,13 @@ in_image "buildah build --quiet -t localhost/built /src >/dev/null && ${check}" 
 in_image "su build -c 'buildah unshare cat /proc/self/uid_map' | awk 'END { exit NR != 2 }'"
 in_image "su build -c 'buildah build --quiet -t localhost/built /src >/dev/null && ${check}'" |
   diff - <(printf 'Seccomp:\t2\nhello\n')
-# Build context from a Git URL, which needs git in the image.
-in_image "buildah build --quiet https://github.com/docker-library/hello-world.git#master:amd64 >/dev/null"
+# Build context from a Git URL, which needs git in the image. buildah 1.26 does not
+# support the #ref:subdirectory syntax yet, and the repository has no Containerfile at its
+# root, so it is skipped there.
+version="$("${buildah}" --version | awk '{ print $3 }')"
+if [[ "${version}" != 1.26.* ]]; then
+  in_image "buildah build --quiet https://github.com/docker-library/hello-world.git#master:amd64 >/dev/null"
+fi
 
 docker image rm "${image}" >/dev/null
 echo "image tests passed" >&2

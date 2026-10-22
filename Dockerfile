@@ -26,8 +26,9 @@ esac
 touch /marker
 # git: build contexts from Git URLs. shadow-subids: newuidmap and newgidmap (file
 # capabilities) for rootless. fuse-overlayfs: rootless overlay where the kernel's is not
-# allowed.
-apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs
+# allowed. netavark: recent buildah releases refuse to create containers without it, even
+# with host networking, which the image uses by default (packaging/image/containers.conf).
+apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs netavark
 
 # Unprivileged user for rootless builds, with a subordinate ID range and its own
 # storage volume.
@@ -38,13 +39,6 @@ echo 'build:100000:65536' >> /rootfs/etc/subuid
 echo 'build:100000:65536' >> /rootfs/etc/subgid
 mkdir -p /rootfs/home/build/.local/share/containers
 chown -R 1000:1000 /rootfs/home/build
-
-# Recent buildah releases refuse to create containers unless a netavark binary exists,
-# even with host networking, which the image always uses (packaging/image/containers.conf).
-# The link only satisfies that check; if anything runs it, buildah fails on the unknown
-# arguments.
-mkdir -p /rootfs/usr/libexec/podman
-ln -s /usr/bin/buildah /rootfs/usr/libexec/podman/netavark
 
 # ctime cannot be preserved, so -cnewer finds exactly what the steps above wrote.
 mkdir /delta
