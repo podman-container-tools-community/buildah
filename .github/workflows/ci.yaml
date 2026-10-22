@@ -28,7 +28,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -o pipefail
           versions="$(hack/upstream-releases.sh | tac | sort -uV -t. -k1,2 | jq -Rnc '[inputs]')"
+          [[ "${versions}" != "[]" ]]
           echo "versions=${versions}" >> "$GITHUB_OUTPUT"
 
   test:
