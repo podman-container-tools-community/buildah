@@ -45,8 +45,10 @@ sudo apt update
 sudo apt install buildah
 ```
 
-To stay on one release, replace `releases/latest/download` in the URI with
-`releases/download/vX.Y.Z`.
+The repository only serves the newest release: after a new upstream release, the `.deb`
+URLs in an older cached index are gone (404), so run `sudo apt update` before
+`apt install` or `apt upgrade`. To stay on one release, replace
+`releases/latest/download` in the URI with `releases/download/vX.Y.Z`.
 
 The packages use epoch 3, so they stay installed when the distribution ships its own
 buildah update. To go back to the distribution's package, remove the source and run
@@ -123,9 +125,10 @@ compiled from Go:
   checkout at the release tag and its `vendor/` directory, unmodified; the binary
   records the upstream commit (`vcs.revision`) instead of a module hash.
 - The C parts (cgo in buildah and its dependencies, musl, libseccomp) are compiled with
-  [zig](https://ziglang.org) at a pinned version. libseccomp comes from its upstream
-  release tarball, pinned by version and sha256 in
-  [`.github/actions/setup`](.github/actions/setup/action.yaml).
+  [zig](https://ziglang.org) at a version pinned in
+  [`.github/actions/setup`](.github/actions/setup/action.yaml). libseccomp comes from
+  its upstream release tarball, pinned by version and sha256 in
+  [`hack/build-sysroot.sh`](hack/build-sysroot.sh).
 - Builds run only in GitHub Actions. Binaries and checksums are signed keyless with
   [cosign](https://github.com/sigstore/cosign) via GitHub OIDC, images are signed the
   same way, and every file in `checksums.txt` gets a GitHub build provenance
@@ -153,10 +156,14 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
    on it. It only runs once the repository variable `RELEASES_ENABLED` is `true`, and
    starts at most `MAX_RELEASES_PER_RUN` releases per run (a repository variable, default
    10), newest first; the rest follow with the next runs.
-2. `release.yaml` builds that tag: GitHub release, images on `ghcr.io`, signatures and
-   attestations. Image tags: `vX.Y.Z` and `vX.Y.Z-immutable` always, `vX.Y` for the newest release of a minor,
-   `vX` and `latest` for the newest upstream release by version (not upstream's GitHub
-   "latest" flag, which a backport release of an older minor can take).
+2. `release.yaml` builds that tag: GitHub release, packages, apt repository, images on
+   `ghcr.io` ([`hack/build-image.sh`](hack/build-image.sh)), signatures and attestations.
+   Image tags: `vX.Y.Z` and `vX.Y.Z-immutable` always, `vX.Y` for the newest release of
+   a minor, `vX` and `latest` for the newest upstream release by version (not upstream's
+   GitHub "latest" flag, which a backport release of an older minor can take).
+   `vX.Y.Z-immutable` is pushed only by the release itself and never moves; a release
+   run that fails after the image step and is retried keeps the first run's tag (same
+   binaries, since the build is reproducible, but that run's signature and SBOM).
 3. Before anything is published, [`test.yaml`](.github/workflows/test.yaml) builds the
    release and runs the [bats](https://github.com/bats-core/bats-core) tests in
    [`test/functional.bats`](test/functional.bats) through
@@ -180,15 +187,20 @@ A release can also be started by hand for an existing tag:
 gh workflow run release.yaml --ref v1.46.0
 ```
 
-The image's Alpine packages are not pinned, so a base image update or an Alpine package
-fix needs new images without a new release. `release.yaml` run on `main` with the
-`images` input rebuilds, pushes and signs only the images of an existing release with
-the current `Dockerfile`, after checking that the rebuilt binaries match the released
-checksums. All tags of that release move except `vX.Y.Z-immutable`, which keeps the
-digest of the original release:
+Images are rebuilt without a new release when the Alpine base image or its packages
+change: [`rebuild.yaml`](.github/workflows/rebuild.yaml) runs weekly for the newest
+release of every minor, after a merge to `main` that changes the `Dockerfile`,
+`packaging/image` or `hack/build-image.sh`, and on demand (`-f all=true` for every
+release, `-f version=v1.46.0` for one). It downloads the release's archives, checks them
+against the cosign-signed `checksums.txt`, builds the image with the current `Dockerfile`
+through [`hack/build-image.sh`](hack/build-image.sh), runs `test/image.bats` against it and
+then pushes and signs all tags of that release except `v1.46.0-immutable`, which keeps the
+digest of the original release.
+No toolchain is involved, so the images always contain exactly the released binaries.
+Like `sync.yaml`, it only runs once `RELEASES_ENABLED` is `true`.
 
 ```sh
-gh workflow run release.yaml --ref main -f images=v1.46.0
+gh workflow run rebuild.yaml --repo podman-container-tools-community/buildah -f all=true
 ```
 
 ## How it works
@@ -197,7 +209,7 @@ gh workflow run release.yaml --ref main -f images=v1.46.0
   and this repository into `.build/`. [`.github/actions/setup`](.github/actions/setup/action.yaml)
   hides `.build/` from Git (`.git/info/exclude`), so goreleaser sees a clean upstream
   checkout and takes module path, `go.sum`, tag and completions from it. The goreleaser
-  configuration and `Dockerfile` are used from `.build/`.
+  configuration is used from `.build/`.
 - goreleaser's `gomod.proxy` then compiles `<module>/cmd/buildah@<tag>` from the Go
   module proxy, verified against sum.golang.org, rather than from the checkout. The
   module path changed from `github.com/containers/buildah` to `go.podman.io/buildah` in
@@ -207,7 +219,7 @@ gh workflow run release.yaml --ref main -f images=v1.46.0
   themselves endlessly and `RUN` steps run without seccomp. So both architectures are
   cross-compiled on one amd64 runner with `zig cc` for musl and linked statically
   (`-linkmode external -extldflags '-static -s'`) against a static libseccomp that
-  [`hack/build-libseccomp.sh`](hack/build-libseccomp.sh) builds with zig, too.
+  [`hack/build-sysroot.sh`](hack/build-sysroot.sh) builds with zig, too.
 - Dependencies use what musl 1.2.4 removed: go-sqlite3 the `*64` functions
   (`-D_LARGEFILE64_SOURCE`), and containers/storage before buildah 1.36 `basename()`
   without including `libgen.h`, so for releases before 1.36
@@ -224,6 +236,10 @@ gh workflow run release.yaml --ref main -f images=v1.46.0
   releases).
 - The upstream commit and build time are passed with `-X main.GitCommit` and
   `-X main.buildInfo`, as upstream's Makefile does, so `buildah version` shows them.
+- The image is built by [`hack/build-image.sh`](hack/build-image.sh) from the binaries
+  goreleaser built (or, for rebuilds, the released archives) and `packaging/image/`,
+  with Docker buildx for both architectures, then signed with cosign. The same script
+  builds the image for the tests, so the image build is exercised on every pull request.
 - The release is signed keyless with cosign through GitHub OIDC: the checksum file
   (`checksums.txt.sigstore.json`) and the images. A GitHub build provenance
   attestation is created for every file in `checksums.txt`.
@@ -286,7 +302,8 @@ cosign verify ghcr.io/podman-container-tools-community/buildah:v1.46.0 \
 
 See [Reproduce locally](#reproduce-locally). Use the Go version shown by `go version -m`
 on the released binary, and the zig and libseccomp versions from
-[`.github/actions/setup`](.github/actions/setup/action.yaml) at the release tag.
+[`.github/actions/setup`](.github/actions/setup/action.yaml) and
+[`hack/build-sysroot.sh`](hack/build-sysroot.sh) at the release tag.
 
 ## Limitations
 
@@ -295,7 +312,8 @@ this means:
 
 - **netavark is needed.** Recent buildah releases refuse to create any container
   without a `netavark` binary in the helper directories, even with `--network host`.
-  The packages recommend the distribution's netavark, and the image contains Alpine's.
+  The packages depend on the distribution's netavark (so they do not install on Ubuntu
+  22.04, which has none), and the image contains Alpine's.
 - **No GPG signing.** `buildah push --sign-by <fingerprint>` and `buildah commit
   --sign-by` fail. Verifying GPG signatures through `policy.json` (`signedBy` with
   `keyPath`) works. Sigstore signing and verification work fully.
@@ -323,13 +341,11 @@ Needs Go, [zig](https://ziglang.org/download/), gperf, pkg-config and goreleaser
 git clone --branch v1.46.0 https://github.com/podman-container-tools/buildah
 cd buildah
 git clone https://github.com/podman-container-tools-community/buildah .build
-printf '/.build/\n/dist/\n' >> .git/info/exclude
-curl -fsSLo /tmp/libseccomp-2.6.0.tar.gz https://github.com/seccomp/libseccomp/releases/download/v2.6.0/libseccomp-2.6.0.tar.gz
-.build/hack/build-libseccomp.sh /tmp/libseccomp-2.6.0.tar.gz /tmp/sysroot
-cp .build/hack/musl-compat.h /tmp/sysroot/
+printf '/.build/\n/dist/\n/.zig-cache/\n' >> .git/info/exclude
+.build/hack/build-sysroot.sh /tmp/sysroot
+SYSROOT=/tmp/sysroot GOTOOLCHAIN=local \
 GITHUB_REPOSITORY_OWNER=podman-container-tools-community GITHUB_REPOSITORY=podman-container-tools-community/buildah \
-GITHUB_REPOSITORY_NAME=buildah IS_LATEST=false IS_LATEST_MINOR=false SYSROOT=/tmp/sysroot GOTOOLCHAIN=local \
-  goreleaser release --config .build/.goreleaser.yaml --clean --skip=publish,sign,docker,sbom
+  goreleaser release --config .build/.goreleaser.yaml --clean --skip=publish,sign,sbom
 ```
 
 For releases with `replace` directives in `go.mod`, use a copy of the configuration
@@ -342,22 +358,24 @@ identical.
 This repository is checked out to `.build/` inside an upstream checkout.
 
 ```
-.goreleaser.yaml                     build, archive, package, image and signing configuration
-Dockerfile                           image (its RUN steps run on the build platform, no emulation)
+.goreleaser.yaml                     build, archive, package and signing configuration
+Dockerfile                           image on Alpine; packages cross-installed with apk, no emulation
 hack/upstream-releases.sh            upstream releases to build
-hack/build-libseccomp.sh             static musl libseccomp for both architectures
+hack/build-sysroot.sh                static musl libseccomp for both architectures, musl-compat.h
 hack/musl-compat.h                   declares basename() for releases before 1.36
+hack/build-image.sh                  builds, pushes and signs the image from built or released binaries
 hack/functional-test.sh              runs test/functional.bats and test/signing.bats as root and rootless
-hack/image-test.sh                   builds the image and runs test/image.bats
+hack/image-test.sh                   builds the image from a dist directory, runs test/image.bats
 test/                                bats tests for the binary and the image
-.github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser
+.github/actions/setup/               hide .build/ from Git, install Go, zig, the sysroot, syft, goreleaser
 .github/workflows/test.yaml          build one release, run functional and image tests
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
+.github/workflows/rebuild.yaml       weekly and on image changes: rebuild images from released binaries
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
 packaging/image/                     policy.json, containers.conf and registries.conf for the image
-renovate.json                        base image, action, libseccomp and bats-core updates
+renovate.json                        base image, action, zig, libseccomp and bats-core updates
 mise.toml, mise.lock                 bats-core for the tests, installed with mise
 ```

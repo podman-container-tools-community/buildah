@@ -1,8 +1,9 @@
 name: test
 
-# Builds one upstream release without publishing anything, runs functional tests
+# Builds one upstream release without publishing anything, runs the functional tests
 # (hack/functional-test.sh) against the amd64 binary, as root and rootless, and builds
-# and tests the image (hack/image-test.sh).
+# and tests the image (hack/image-test.sh). Both run bats-core; each test case shows up
+# in the log.
 #
 # Upstream's integration tests are not run: they need upstream's CI VMs (bats, a fixed
 # set of tools and registries) and for older releases depend on registry content that
@@ -16,7 +17,7 @@ on:
         type: string
         required: true
       cache:
-        description: Restore and save the libseccomp build in the Actions cache (pull request CI only)
+        description: Restore and save the C sysroot in the Actions cache (pull request CI only)
         type: boolean
         default: false
 
@@ -36,7 +37,6 @@ jobs:
         with:
           repository: podman-container-tools/buildah
           ref: refs/tags/${{ inputs.version }}
-          fetch-depth: 0
           persist-credentials: false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -49,37 +49,14 @@ jobs:
           version: ${{ inputs.version }}
           cache: ${{ inputs.cache }}
 
-      # dockers_v2 builds and pushes in one step, so a dry run cannot build images.
       - name: Build
-        run: goreleaser release --config "${GORELEASER_CONFIG}" --clean --skip=publish,sign,docker
-        env:
-          IS_LATEST: "false"
-          IS_LATEST_MINOR: "false"
-          GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: goreleaser release --config "${GORELEASER_CONFIG}" --clean --skip=publish,sign
 
       - name: Smoke test
         run: |
           go version -m dist/buildah_linux_amd64_v1/buildah
           dist/buildah_linux_amd64_v1/buildah --version
           file dist/buildah_linux_amd64_v1/buildah dist/buildah_linux_arm64_v8.0/buildah | tee /dev/stderr | grep -c 'statically linked' | grep -qx 2
-
-      # netavark (buildah refuses to create containers without it in recent releases),
-      # newuidmap/newgidmap and a subordinate ID range for rootless. Ubuntu 24.04 and later restrict
-      # unprivileged user namespaces through AppArmor. oci isolation uses the runc from
-      # Docker's containerd.io: Ubuntu's runc package replaces it and stops Docker (and the
-      # registry service), and the runner's crun 1.14 rejects runtime spec 1.3.0 from
-      # buildah 1.45+.
-      - name: Prepare host
-        run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends netavark uidmap jq
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          grep -q "^$(id -un):" /etc/subuid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subuid
-          grep -q "^$(id -un):" /etc/subgid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subgid
-          sudo mkdir -p /etc/containers/containers.conf.d
-          printf '[engine]\nruntime = "runc"\n' | sudo tee /etc/containers/containers.conf.d/runtime.conf
-          [[ -e /etc/containers/policy.json ]] ||
-            echo '{"default":[{"type":"insecureAcceptAnything"}]}' | sudo tee /etc/containers/policy.json
 
       # bats from .build/mise.toml, checked against .build/mise.lock. Its bin directory,
       # not the shims, goes on PATH, so bats also runs outside .build/.
@@ -89,8 +66,29 @@ jobs:
           add_shims_to_path: false
           cache: false
 
+      # Ubuntu 26.04, like 24.04, denies unprivileged user namespaces to unconfined
+      # processes, which the rootless tests need.
+      - name: Allow user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
+      # netavark (buildah refuses to create containers without it in recent releases),
+      # newuidmap/newgidmap and a subordinate ID range for rootless. oci isolation uses the
+      # runc from Docker's containerd.io: Ubuntu's runc package replaces it and stops Docker
+      # (and the registry service), and the runner's crun 1.14 rejects runtime spec 1.3.0
+      # from buildah 1.45+.
+      - name: Prepare host
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends netavark uidmap jq
+          grep -q "^$(id -un):" /etc/subuid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subuid
+          grep -q "^$(id -un):" /etc/subgid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subgid
+          sudo mkdir -p /etc/containers/containers.conf.d
+          printf '[engine]\nruntime = "runc"\n' | sudo tee /etc/containers/containers.conf.d/runtime.conf
+          [[ -e /etc/containers/policy.json ]] ||
+            echo '{"default":[{"type":"insecureAcceptAnything"}]}' | sudo tee /etc/containers/policy.json
+
       - name: Functional tests
         run: .build/hack/functional-test.sh dist/buildah_linux_amd64_v1/buildah localhost:5000
 
       - name: Image tests
-        run: .build/hack/image-test.sh dist/buildah_linux_amd64_v1/buildah
+        run: .build/hack/image-test.sh dist

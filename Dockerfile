@@ -1,14 +1,17 @@
 # syntax=docker/dockerfile:1
 
-# Pinned by index digest so image builds stay reproducible; Renovate bumps it (both FROM
-# lines name the same image).
-FROM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS base
+# The static release binary with its runtime helpers from Alpine, configured like
+# upstream's quay.io/buildah/stable image. Built by hack/build-image.sh from a context of
+# linux/<arch>/<binary> and packaging/image/.
+# Pinned by version and index digest so image builds stay reproducible; Renovate bumps it
+# (both FROM lines name the same image).
+FROM alpine:3.24.3@sha256:b3413572228e34bd1c9245f5565e6cd127005655e8a7899aef33d8e83255c9e6 AS base
 
 # Everything that has to run happens here, on the build host's platform, so no emulation
 # is needed: apk installs the target architecture's packages into a copy of the target's
 # file system, without their scripts (only fuse-overlayfs has one, a modprobe). Only what
 # changed ends up in /delta, so the final image adds one layer on top of Alpine's.
-FROM --platform=$BUILDPLATFORM alpine:3.24@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS delta
+FROM --platform=$BUILDPLATFORM alpine:3.24.3@sha256:b3413572228e34bd1c9245f5565e6cd127005655e8a7899aef33d8e83255c9e6 AS delta
 ARG TARGETARCH
 SHELL ["/bin/ash", "-euo", "pipefail", "-c"]
 # Versions come from the Alpine release the base image pins; apk cannot pin older ones,
@@ -40,8 +43,15 @@ echo 'build:x:1000:1000:build:/home/build:/bin/bash' >> /rootfs/etc/passwd
 echo 'build:x:1000:' >> /rootfs/etc/group
 echo 'build:!::0:::::' >> /rootfs/etc/shadow
 printf 'root:1:65535\nbuild:1:999\nbuild:1001:64535\n' | tee -a /rootfs/etc/subuid >> /rootfs/etc/subgid
-mkdir -p /rootfs/home/build/.local/share/containers
+mkdir -p /rootfs/home/build/.local/share/containers /rootfs/home/build/.config/containers
 chown -R 1000:1000 /rootfs/home/build
+
+# Empty additional image store, as in upstream's image, for a read-only store mounted
+# at /var/lib/shared (storage.conf).
+for store in overlay vfs; do
+  mkdir -p "/rootfs/var/lib/shared/${store}-images" "/rootfs/var/lib/shared/${store}-layers"
+  touch "/rootfs/var/lib/shared/${store}-images/images.lock" "/rootfs/var/lib/shared/${store}-layers/layers.lock"
+done
 
 # ctime cannot be preserved, so -cnewer finds exactly what the steps above wrote.
 mkdir /delta
@@ -54,8 +64,9 @@ FROM base
 ARG TARGETPLATFORM
 ENV BUILDAH_ISOLATION=chroot
 COPY --from=delta /delta/ /
-COPY .build/packaging/image/policy.json .build/packaging/image/containers.conf \
-  .build/packaging/image/registries.conf /etc/containers/
+COPY packaging/image/policy.json packaging/image/containers.conf \
+  packaging/image/registries.conf packaging/image/storage.conf /etc/containers/
+COPY --chown=1000:1000 packaging/image/storage-rootless.conf /home/build/.config/containers/storage.conf
 COPY $TARGETPLATFORM/buildah /usr/bin/buildah
 # Storage and buildah's temporary overlays (build context) need a file system that is
 # not the image's overlay.
