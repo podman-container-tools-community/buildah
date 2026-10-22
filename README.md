@@ -164,7 +164,9 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
    root and rootless: `from`, `run` and `build` with chroot and OCI
    isolation (checking that seccomp confines `RUN`), overlay storage, `commit`, `push`,
    `pull`, a multi-platform `build --manifest` with `manifest push --all`, and
-   `unshare`. [`hack/image-test.sh`](hack/image-test.sh) builds the image from the same
+   `unshare`. [`test/signing.bats`](test/signing.bats) follows it: `pull` and `from`
+   verify a GPG (simple signing) signature through a `policy.json`, and `push --sign-by`
+   fails with a clear error. [`hack/image-test.sh`](hack/image-test.sh) builds the image from the same
    binary and runs [`test/image.bats`](test/image.bats): `build` in it as root and as
    the rootless `build` user, from a Git URL and with a short image name. Both take
    bats from [mise](https://mise.jdx.dev), pinned in [`mise.lock`](mise.lock). Upstream's own integration tests are not run, because they need upstream's
@@ -345,7 +347,7 @@ Dockerfile                           image (its RUN steps run on the build platf
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
 hack/musl-compat.h                   declares basename() for releases before 1.36
-hack/functional-test.sh              runs test/functional.bats as root and rootless
+hack/functional-test.sh              runs test/functional.bats and test/signing.bats as root and rootless
 hack/image-test.sh                   builds the image and runs test/image.bats
 test/                                bats tests for the binary and the image
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser
