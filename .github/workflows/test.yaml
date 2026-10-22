@@ -91,17 +91,21 @@ jobs:
           name: binaries-${{ inputs.version }}
           path: binaries/
 
-      # Runtimes for oci isolation, netavark (buildah refuses to create containers
-      # without it in recent releases), newuidmap/newgidmap and a subordinate ID range for
-      # rootless. Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor.
+      # netavark (buildah refuses to create containers without it in recent releases),
+      # newuidmap/newgidmap and a subordinate ID range for rootless. Ubuntu 24.04 restricts
+      # unprivileged user namespaces through AppArmor. oci isolation uses the runc from
+      # Docker's containerd.io: Ubuntu's runc package replaces it and stops Docker (and the
+      # registry service), and the runner's crun 1.14 rejects runtime spec 1.3.0 from
+      # buildah 1.45+.
       - name: Prepare host
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends crun runc netavark uidmap jq
+          sudo apt-get install -y -q --no-install-recommends netavark uidmap jq
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           grep -q "^$(id -un):" /etc/subuid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subuid
           grep -q "^$(id -un):" /etc/subgid || echo "$(id -un):100000:65536" | sudo tee -a /etc/subgid
-          sudo mkdir -p /etc/containers
+          sudo mkdir -p /etc/containers/containers.conf.d
+          printf '[engine]\nruntime = "runc"\n' | sudo tee /etc/containers/containers.conf.d/runtime.conf
           [[ -e /etc/containers/policy.json ]] ||
             echo '{"default":[{"type":"insecureAcceptAnything"}]}' | sudo tee /etc/containers/policy.json
           chmod +x binaries/*
