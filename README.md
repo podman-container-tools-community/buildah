@@ -160,8 +160,8 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
    `pull`, a multi-platform `build --manifest` with `manifest push --all`, and
    `unshare`. [`hack/image-test.sh`](hack/image-test.sh) builds the image from the same
    binary and runs [`test/image.bats`](test/image.bats): `build` in it as root and as
-   the rootless `build` user, from a Git URL and with a short image name. Both install
-   the pinned bats release with [`hack/install-bats.sh`](hack/install-bats.sh). Upstream's own integration tests are not run, because they need upstream's
+   the rootless `build` user, from a Git URL and with a short image name. Both take
+   bats from [mise](https://mise.jdx.dev), pinned in [`mise.lock`](mise.lock). Upstream's own integration tests are not run, because they need upstream's
    CI VMs and, for older releases, registry content that changed since.
 4. [`ci.yaml`](.github/workflows/ci.yaml) runs `test.yaml` for the newest release of every
    minor version on pull requests.
@@ -327,8 +327,6 @@ Dockerfile                           image (its RUN steps run on the build platf
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
 hack/musl-compat.h                   declares basename() for releases before 1.36
-hack/install-bats.sh                 pinned bats-core release for the tests
-hack/update-checksums.sh             recompute the bats-core sha256 pin after a version bump
 hack/functional-test.sh              runs test/functional.bats as root and rootless
 hack/image-test.sh                   builds the image and runs test/image.bats
 test/                                bats tests for the binary and the image
@@ -337,9 +335,9 @@ test/                                bats tests for the binary and the image
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
-.github/workflows/renovate.yaml      Renovate pull requests: commit the recomputed bats-core sha256
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
 packaging/image/                     policy.json, containers.conf and registries.conf for the image
-renovate.json                        base image, action and libseccomp updates
+renovate.json                        base image, action, libseccomp and bats-core updates
+mise.toml, mise.lock                 bats-core for the tests, installed with mise
 ```
