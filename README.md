@@ -154,7 +154,7 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
 3. Before anything is published, [`test.yaml`](.github/workflows/test.yaml) builds the
    release and runs the [bats](https://github.com/bats-core/bats-core) tests in
    [`test/functional.bats`](test/functional.bats) through
-   [`hack/functional-test.sh`](hack/functional-test.sh) on amd64 and arm64 runners, as
+   [`hack/functional-test.sh`](hack/functional-test.sh) against the amd64 binary, as
    root and rootless: `from`, `run` and `build` with chroot and OCI
    isolation (checking that seccomp confines `RUN`), overlay storage, `commit`, `push`,
    `pull`, a multi-platform `build --manifest` with `manifest push --all`, and
@@ -292,8 +292,8 @@ this means:
   packages recommend the distribution's package that owns it
   (`golang-github-containers-common` on Debian and Ubuntu, `containers-common` on rpm
   distributions); the image ships `policy.json`, `containers.conf` and `registries.conf`.
-- **Linux only**, `amd64` and `arm64`. The arm64 binary is cross-compiled and tested on
-  arm64 runners.
+- **Linux only**, `amd64` and `arm64`. The arm64 binary is cross-compiled and checked to
+  be static, but its functional tests do not run: CI tests on amd64 only.
 
 ## Reproduce locally
 
@@ -331,7 +331,7 @@ hack/functional-test.sh              runs test/functional.bats as root and rootl
 hack/image-test.sh                   builds the image and runs test/image.bats
 test/                                bats tests for the binary and the image
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser
-.github/workflows/test.yaml          build one release, run functional and image tests on amd64 and arm64
+.github/workflows/test.yaml          build one release, run functional and image tests
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
