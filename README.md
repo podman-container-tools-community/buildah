@@ -335,13 +335,16 @@ this means:
 
 ## Reproduce locally
 
-Needs Go, [zig](https://ziglang.org/download/), gperf, pkg-config and goreleaser.
+Needs Go, gperf, pkg-config and [mise](https://mise.jdx.dev), which installs zig, goreleaser
+and syft from `.build/mise.lock`:
 
 ```sh
 git clone --branch v1.46.0 https://github.com/podman-container-tools/buildah
 cd buildah
 git clone https://github.com/podman-container-tools-community/buildah .build
 printf '/.build/\n/dist/\n/.zig-cache/\n' >> .git/info/exclude
+(cd .build && mise install)
+eval "$(mise env -C .build)"
 .build/hack/build-sysroot.sh /tmp/sysroot
 SYSROOT=/tmp/sysroot GOTOOLCHAIN=local \
 GITHUB_REPOSITORY_OWNER=podman-container-tools-community GITHUB_REPOSITORY=podman-container-tools-community/buildah \
@@ -367,7 +370,7 @@ hack/build-image.sh                  builds, pushes and signs the image from bui
 hack/functional-test.sh              runs test/functional.bats and test/signing.bats as root and rootless
 hack/image-test.sh                   builds the image from a dist directory, runs test/image.bats
 test/                                bats tests for the binary and the image
-.github/actions/setup/               hide .build/ from Git, install Go, zig, the sysroot, syft, goreleaser
+.github/actions/setup/               hide .build/ from Git, install Go and the mise tools, build the sysroot
 .github/workflows/test.yaml          build one release, run functional and image tests
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
@@ -376,6 +379,6 @@ test/                                bats tests for the binary and the image
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
 packaging/image/                     policy.json, containers.conf and registries.conf for the image
-renovate.json                        base image, action, zig, libseccomp and bats-core updates
-mise.toml, mise.lock                 bats-core for the tests, installed with mise
+renovate.json                        base image, action, mise tool and libseccomp updates
+mise.toml, mise.lock                 zig, goreleaser, syft, cosign and bats, installed with mise
 ```
