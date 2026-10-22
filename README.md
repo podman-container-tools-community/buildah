@@ -1,4 +1,14 @@
+[![CI](https://github.com/podman-container-tools-community/buildah/actions/workflows/ci.yaml/badge.svg)](https://github.com/podman-container-tools-community/buildah/actions/workflows/ci.yaml)
+[![Release](https://github.com/podman-container-tools-community/buildah/actions/workflows/release.yaml/badge.svg)](https://github.com/podman-container-tools-community/buildah/actions/workflows/release.yaml)
+[![GitHub license](https://img.shields.io/github/license/podman-container-tools-community/buildah)](https://github.com/podman-container-tools-community/buildah/blob/main/LICENSE)
+[![Current Release](https://img.shields.io/github/release/podman-container-tools-community/buildah.svg?logo=github)](https://github.com/podman-container-tools-community/buildah/releases/latest)
+[![GitHub Repo stars](https://img.shields.io/github/stars/podman-container-tools-community/buildah?style=flat&logo=github)](https://github.com/podman-container-tools-community/buildah/stargazers)
+[![GitHub all releases](https://img.shields.io/github/downloads/podman-container-tools-community/buildah/total?logo=github)](https://github.com/podman-container-tools-community/buildah/releases/latest)
+[![ghcr.io Pulls](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fipitio.github.io%2Fbackage%2Fpodman-container-tools-community%2Fbuildah%2Fbuildah.json&query=%24.downloads&logo=github&label=ghcr.io%20pulls)](https://github.com/podman-container-tools-community/buildah/pkgs/container/buildah)
+
 # buildah (community build)
+
+⭐ Don't forget to star this repository! ⭐
 
 Community-maintained, static binaries and container images of
 [buildah](https://github.com/podman-container-tools/buildah), part of
