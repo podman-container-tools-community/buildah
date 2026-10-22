@@ -43,8 +43,8 @@ runs:
 
     # Static libseccomp for the seccomp build tag; libseccomp-golang finds it through
     # PKG_CONFIG_LIBDIR (see .goreleaser.yaml). hack/musl-compat.h goes next to it.
-    # Renovate bumps the version, the sha256 of the release tarball has to be updated in
-    # the same pull request.
+    # Renovate bumps the version, hack/update-checksums.sh updates the sha256 of the release
+    # tarball (.github/workflows/renovate.yaml).
     - name: Build sysroot
       shell: bash
       env:
