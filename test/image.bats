@@ -58,6 +58,14 @@ check='c="$(buildah from localhost/built)" && buildah run "$c" -- cat /seccomp /
   expect_output $'Seccomp:\t2\nhello'
 }
 
+@test "storage.conf: overlay with the additional image store, as root and rootless" {
+  run -0 --separate-stderr in_image "buildah info --format '{{.store.GraphDriverName}} {{.store.GraphRoot}}'"
+  expect_output "overlay /var/lib/containers/storage"
+  run -0 --separate-stderr in_image "su build -c \"buildah info --format '{{.store.GraphDriverName}} {{.store.GraphRoot}}'\""
+  expect_output "overlay /home/build/.local/share/containers/storage"
+  run -0 in_image "test -f /var/lib/shared/overlay-images/images.lock && grep -q /var/lib/shared /etc/containers/storage.conf"
+}
+
 @test "short names resolve through registries.conf" {
   run -0 --separate-stderr in_image "buildah pull --quiet alpine"
 }

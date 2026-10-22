@@ -43,8 +43,15 @@ echo 'build:x:1000:1000:build:/home/build:/bin/bash' >> /rootfs/etc/passwd
 echo 'build:x:1000:' >> /rootfs/etc/group
 echo 'build:!::0:::::' >> /rootfs/etc/shadow
 printf 'root:1:65535\nbuild:1:999\nbuild:1001:64535\n' | tee -a /rootfs/etc/subuid >> /rootfs/etc/subgid
-mkdir -p /rootfs/home/build/.local/share/containers
+mkdir -p /rootfs/home/build/.local/share/containers /rootfs/home/build/.config/containers
 chown -R 1000:1000 /rootfs/home/build
+
+# Empty additional image store, as in upstream's image, for a read-only store mounted
+# at /var/lib/shared (storage.conf).
+for store in overlay vfs; do
+  mkdir -p "/rootfs/var/lib/shared/${store}-images" "/rootfs/var/lib/shared/${store}-layers"
+  touch "/rootfs/var/lib/shared/${store}-images/images.lock" "/rootfs/var/lib/shared/${store}-layers/layers.lock"
+done
 
 # ctime cannot be preserved, so -cnewer finds exactly what the steps above wrote.
 mkdir /delta
@@ -58,7 +65,8 @@ ARG TARGETPLATFORM
 ENV BUILDAH_ISOLATION=chroot
 COPY --from=delta /delta/ /
 COPY packaging/image/policy.json packaging/image/containers.conf \
-  packaging/image/registries.conf /etc/containers/
+  packaging/image/registries.conf packaging/image/storage.conf /etc/containers/
+COPY --chown=1000:1000 packaging/image/storage-rootless.conf /home/build/.config/containers/storage.conf
 COPY $TARGETPLATFORM/buildah /usr/bin/buildah
 # Storage and buildah's temporary overlays (build context) need a file system that is
 # not the image's overlay.
