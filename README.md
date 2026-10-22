@@ -327,7 +327,6 @@ Dockerfile                           image (its RUN steps run on the build platf
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
 hack/musl-compat.h                   declares basename() for releases before 1.36
-hack/update-checksums.sh             recompute the sha256 pins and fill in mise.lock after a bump
 hack/functional-test.sh              runs test/functional.bats as root and rootless
 hack/image-test.sh                   builds the image and runs test/image.bats
 test/                                bats tests for the binary and the image
@@ -336,7 +335,6 @@ test/                                bats tests for the binary and the image
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
-.github/workflows/renovate.yaml      Renovate pull requests: commit recomputed sha256 pins
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
 packaging/image/                     policy.json, containers.conf and registries.conf for the image
