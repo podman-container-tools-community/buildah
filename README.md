@@ -122,7 +122,9 @@ compiled from Go:
 - The C parts (cgo in buildah and its dependencies, musl, libseccomp) are compiled with
   [zig](https://ziglang.org) at a pinned version. libseccomp comes from its upstream
   release tarball, pinned by version and sha256 in
-  [`.github/actions/setup`](.github/actions/setup/action.yaml).
+  [`.github/actions/setup`](.github/actions/setup/action.yaml) and checked against the
+  release's GPG signature by one of the signing keys upstream lists, pinned by fingerprint
+  in [`hack/verify-libseccomp.sh`](hack/verify-libseccomp.sh).
 - Builds run only in GitHub Actions. Binaries and checksums are signed keyless with
   [cosign](https://github.com/sigstore/cosign) via GitHub OIDC, images are signed the
   same way, and every file in `checksums.txt` gets a GitHub build provenance
@@ -297,7 +299,7 @@ this means:
 
 ## Reproduce locally
 
-Needs Go, [zig](https://ziglang.org/download/), gperf, pkg-config and goreleaser.
+Needs Go, [zig](https://ziglang.org/download/), gperf, pkg-config, gpg and goreleaser.
 
 ```sh
 git clone --branch v1.46.0 https://github.com/podman-container-tools/buildah
@@ -305,6 +307,8 @@ cd buildah
 git clone https://github.com/podman-container-tools-community/buildah .build
 printf '/.build/\n/dist/\n' >> .git/info/exclude
 curl -fsSLo /tmp/libseccomp-2.6.0.tar.gz https://github.com/seccomp/libseccomp/releases/download/v2.6.0/libseccomp-2.6.0.tar.gz
+curl -fsSLo /tmp/libseccomp-2.6.0.tar.gz.asc https://github.com/seccomp/libseccomp/releases/download/v2.6.0/libseccomp-2.6.0.tar.gz.asc
+.build/hack/verify-libseccomp.sh /tmp/libseccomp-2.6.0.tar.gz /tmp/libseccomp-2.6.0.tar.gz.asc
 .build/hack/build-libseccomp.sh /tmp/libseccomp-2.6.0.tar.gz /tmp/sysroot
 cp .build/hack/musl-compat.h /tmp/sysroot/
 GITHUB_REPOSITORY_OWNER=podman-container-tools-community GITHUB_REPOSITORY=podman-container-tools-community/buildah \
@@ -326,9 +330,11 @@ This repository is checked out to `.build/` inside an upstream checkout.
 Dockerfile                           image (its RUN steps run on the build platform, no emulation)
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
+hack/verify-libseccomp.sh            check the libseccomp tarball's signature against pinned keys
+hack/libseccomp-keys.asc             public keys of libseccomp's release signers
 hack/musl-compat.h                   declares basename() for releases before 1.36
 hack/install-bats.sh                 pinned bats-core release for the tests
-hack/update-checksums.sh             recompute the sha256 pins after a version bump
+hack/update-checksums.sh             recompute the bats-core sha256 pin after a version bump
 hack/functional-test.sh              runs test/functional.bats as root and rootless
 hack/image-test.sh                   builds the image and runs test/image.bats
 test/                                bats tests for the binary and the image
@@ -337,7 +343,7 @@ test/                                bats tests for the binary and the image
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
 .github/workflows/sync.yaml          schedule and main: tag new releases, dispatch release.yaml
 .github/workflows/release.yaml       dispatch on a tag: test.yaml, then release, images, signing
-.github/workflows/renovate.yaml      Renovate pull requests: commit recomputed sha256 pins
+.github/workflows/renovate.yaml      Renovate pull requests: commit the recomputed bats-core sha256
 packaging/gpg.asc                    public GPG key for packages and the apt repository
 packaging/apt/buildah.sources        apt source for the latest release
 packaging/image/                     policy.json, containers.conf and registries.conf for the image
