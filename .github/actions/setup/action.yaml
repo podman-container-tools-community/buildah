@@ -1,0 +1,84 @@
+name: Set up build
+description: >-
+  Expects upstream buildah checked out at a release tag in the workspace root and this
+  repository in .build/. Hides .build/ from git, so goreleaser sees a clean upstream
+  checkout, and installs Go, zig, a static musl libseccomp, syft and goreleaser.
+
+inputs:
+  version:
+    description: Upstream tag being built, e.g. v1.46.0
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Hide .build from git
+      shell: bash
+      run: |
+        printf '/.build/\n/dist/\n/.zig-cache/\n' >> .git/info/exclude
+        if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
+          git status --short --untracked-files=all
+          echo "::error::upstream checkout is not clean"
+          exit 1
+        fi
+
+    # The newest Go, except where it breaks a release's pinned dependencies: 1.44.x does
+    # not build with Go 1.27 (grpc: undefined: http2.TrailerPrefix).
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      with:
+        go-version: ${{ startsWith(inputs.version, 'v1.44.') && '1.26' || 'stable' }}
+        check-latest: true
+        cache: false
+
+    # Never switch to the toolchain named in go.mod.
+    - name: Pin Go toolchain
+      shell: bash
+      run: echo GOTOOLCHAIN=local >> "$GITHUB_ENV"
+
+    # C compiler for both architectures, with musl.
+    - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+      with:
+        version: 0.17.0
+        use-cache: false
+
+    # Static libseccomp for the seccomp build tag; libseccomp-golang finds it through
+    # PKG_CONFIG_LIBDIR (see .goreleaser.yaml). hack/musl-compat.h goes next to it.
+    # Renovate bumps the version, the sha256 of the release tarball has to be updated in
+    # the same pull request.
+    - name: Build sysroot
+      shell: bash
+      env:
+        # renovate: datasource=github-releases depName=seccomp/libseccomp
+        LIBSECCOMP_VERSION: 2.6.0
+        LIBSECCOMP_SHA256: 83b6085232d1588c379dc9b9cae47bb37407cf262e6e74993c61ba72d2a784dc
+      run: | # zizmor: ignore[github-env] only a fixed path goes into GITHUB_ENV
+        command -v gperf >/dev/null || sudo apt-get install -y --no-install-recommends gperf
+        tarball="${RUNNER_TEMP}/libseccomp-${LIBSECCOMP_VERSION}.tar.gz"
+        curl -fsSLo "${tarball}" "https://github.com/seccomp/libseccomp/releases/download/v${LIBSECCOMP_VERSION}/libseccomp-${LIBSECCOMP_VERSION}.tar.gz"
+        sha256sum --check --strict <<< "${LIBSECCOMP_SHA256}  ${tarball}"
+        .build/hack/build-libseccomp.sh "${tarball}" "${RUNNER_TEMP}/sysroot"
+        cp .build/hack/musl-compat.h "${RUNNER_TEMP}/sysroot/"
+        echo "SYSROOT=${RUNNER_TEMP}/sysroot" >> "$GITHUB_ENV"
+
+    # goreleaser's gomod.proxy refuses go.mod replace directives, which a module proxy
+    # build would ignore. Such releases (1.26.0-1.26.9, 1.27.0-1.27.6, 1.28, 1.29.0-1.29.5,
+    # 1.30, 1.35-1.37) are built from the checkout and its vendor directory instead.
+    - name: Pick goreleaser configuration
+      shell: bash
+      run: | # zizmor: ignore[github-env] only a fixed path goes into GITHUB_ENV
+        config=.build/.goreleaser.yaml
+        if grep -qE '^replace|=>' go.mod; then
+          echo "::notice::go.mod has replace directives, building from the checkout instead of the Go module proxy"
+          config="${RUNNER_TEMP}/goreleaser.yaml"
+          sed 's/^  proxy: true$/  proxy: false/' .build/.goreleaser.yaml > "${config}"
+          grep -qx '  proxy: false' "${config}"
+        fi
+        echo "GORELEASER_CONFIG=${config}" >> "$GITHUB_ENV"
+
+    - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
+    - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+      with:
+        distribution: goreleaser
+        version: v2.18.3
+        install-only: true
