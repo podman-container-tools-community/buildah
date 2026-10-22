@@ -142,13 +142,16 @@ minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch rele
    attestations. Image tags: `vX.Y.Z` always, `vX.Y` for the newest release of a minor,
    `vX` and `latest` for upstream's latest release.
 3. Before anything is published, [`test.yaml`](.github/workflows/test.yaml) builds the
-   release and runs [`hack/functional-test.sh`](hack/functional-test.sh) on amd64 and
-   arm64 runners, as root and rootless: `from`, `run` and `build` with chroot and OCI
+   release and runs the [bats](https://github.com/bats-core/bats-core) tests in
+   [`test/functional.bats`](test/functional.bats) through
+   [`hack/functional-test.sh`](hack/functional-test.sh) on amd64 and arm64 runners, as
+   root and rootless: `from`, `run` and `build` with chroot and OCI
    isolation (checking that seccomp confines `RUN`), overlay storage, `commit`, `push`,
    `pull`, a multi-platform `build --manifest` with `manifest push --all`, and
    `unshare`. [`hack/image-test.sh`](hack/image-test.sh) builds the image from the same
-   binary and runs `build` in it as root and as the rootless `build` user, and from a Git
-   URL. Upstream's own integration tests are not run, because they need upstream's
+   binary and runs [`test/image.bats`](test/image.bats): `build` in it as root and as
+   the rootless `build` user, from a Git URL and with a short image name. Both install
+   the pinned bats release with [`hack/install-bats.sh`](hack/install-bats.sh). Upstream's own integration tests are not run, because they need upstream's
    CI VMs and, for older releases, registry content that changed since.
 4. [`ci.yaml`](.github/workflows/ci.yaml) runs `test.yaml` for the newest release of every
    minor version on pull requests.
@@ -314,8 +317,10 @@ Dockerfile                           image (its RUN steps run on the build platf
 hack/upstream-releases.sh            upstream releases to build
 hack/build-libseccomp.sh             static musl libseccomp for both architectures
 hack/musl-compat.h                   declares basename() for releases before 1.36
-hack/functional-test.sh              functional tests for a built binary
-hack/image-test.sh                   image tests for a built binary
+hack/install-bats.sh                 pinned bats-core release for the tests
+hack/functional-test.sh              runs test/functional.bats as root and rootless
+hack/image-test.sh                   builds the image and runs test/image.bats
+test/                                bats tests for the binary and the image
 .github/actions/setup/               hide .build/ from Git, install Go, zig, libseccomp, syft, goreleaser
 .github/workflows/test.yaml          build one release, run functional and image tests on amd64 and arm64
 .github/workflows/ci.yaml            pull requests: test.yaml for newest release per minor
