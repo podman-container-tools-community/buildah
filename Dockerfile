@@ -28,7 +28,8 @@ touch /marker
 # capabilities) for rootless. fuse-overlayfs: rootless overlay where the kernel's is not
 # allowed. netavark: recent buildah releases refuse to create containers without it, even
 # with host networking, which the image uses by default (packaging/image/containers.conf).
-apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs netavark
+# crun: OCI runtime for --isolation oci; chroot stays the default (BUILDAH_ISOLATION).
+apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add git shadow-subids fuse-overlayfs netavark crun
 
 # Unprivileged user for rootless builds, with a subordinate ID range and its own
 # storage volume.

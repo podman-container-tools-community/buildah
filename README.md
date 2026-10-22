@@ -80,8 +80,11 @@ the container's own overlay. It contains containers-common's default `policy.jso
 everything) and no `registries.conf`, so image names have to be fully qualified.
 
 The image is Alpine with the static binary, `git` (build contexts from Git URLs),
-`newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's `netavark`. Alpine's own buildah and
-containers-common packages are not installed; `apk add` other tools as needed. For rootless
+`newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's `netavark` and `crun`. With
+`-e BUILDAH_ISOLATION=oci`, a privileged container can use OCI isolation, with host
+networking only: Alpine's netavark does not understand every network option buildah
+sends. Alpine's own buildah and containers-common packages are not installed; `apk add`
+other tools as needed. For rootless
 builds, run as the `build` user (UID 1000, subordinate IDs 100000-165535, storage in the
 `/home/build/.local/share/containers` volume):
 

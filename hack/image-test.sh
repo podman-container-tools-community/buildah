@@ -37,6 +37,8 @@ in_image() {
 check='c="$(buildah from localhost/built)" && buildah run "$c" -- cat /seccomp /hello'
 in_image "buildah build --quiet -t localhost/built /src >/dev/null && ${check}" |
   diff - <(printf 'Seccomp:\t2\nhello\n')
+in_image "buildah build --quiet --isolation oci -t localhost/built /src >/dev/null && ${check}" |
+  diff - <(printf 'Seccomp:\t2\nhello\n')
 in_image "su build -c 'buildah unshare cat /proc/self/uid_map' | awk 'END { exit NR != 2 }'"
 in_image "su build -c 'buildah build --quiet -t localhost/built /src >/dev/null && ${check}'" |
   diff - <(printf 'Seccomp:\t2\nhello\n')
