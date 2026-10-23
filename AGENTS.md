@@ -10,7 +10,7 @@ the repository.
 - Build configuration only, for community builds of upstream
   [buildah](https://github.com/podman-container-tools/buildah). Upstream source is never
   vendored, patched or copied in; it comes from the Go module proxy at the upstream tag
-  (see "Trust model" in the README). A change that would alter what gets compiled does
+  (see "Trust model" in `README.md`). A change that would alter what gets compiled does
   not belong here.
 - One of three sibling repositories built the same way:
   [skopeo](https://github.com/podman-container-tools-community/skopeo),
@@ -60,8 +60,8 @@ mise.toml, mise.lock                 zig, goreleaser, syft, cosign and bats, ins
   module proxy, verified against sum.golang.org, rather than from the checkout. The
   module path changed from `github.com/containers/buildah` to `go.podman.io/buildah` in
   1.44; both work.
-- Releases whose `go.mod` has `replace` directives (listed under "Trust model" in the
-  README) cannot be built from the module proxy, which ignores them. The setup action
+- Releases whose `go.mod` has `replace` directives (listed under "Trust model" in
+  `README.md`) cannot be built from the module proxy, which ignores them. The setup action
   detects them and switches to a copy of the configuration with `proxy: false`, which
   builds from the checkout and its `vendor/` directory.
 - buildah needs cgo: rootless re-execution into a user namespace, chroot isolation and
@@ -109,7 +109,7 @@ cosign and bats with their download checksums. Go is not in mise, because its ve
 depends on the release being built. Run the `hack/` scripts with mise activated or
 through `mise exec --`.
 
-Build a release as described in "Reproduce locally" in the README. Then, from the
+Build a release as described in "Reproduce locally" in `README.md`. Then, from the
 upstream checkout:
 
 ```sh
@@ -119,7 +119,7 @@ mise exec -C .build -- .build/hack/image-test.sh dist
 
 `functional-test.sh` runs as root and rootless and needs a plain-HTTP registry
 (`docker run -d -p 5000:5000 registry:3`), network access to quay.io, sudo, runc or
-crun, netavark, jq, curl, gpg, `newuidmap`/`newgidmap` and a subordinate ID range for
+crun, netavark, jq, `curl`, gpg, `newuidmap`/`newgidmap` and a subordinate ID range for
 the current user; the "Prepare host" step in [`test.yaml`](.github/workflows/test.yaml)
 sets that up on Ubuntu. `image-test.sh` needs Docker with buildx. On Ubuntu 24.04 and
 newer, rootless tests need `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`.
@@ -153,7 +153,7 @@ Conventions:
   there is no bats-assert.
 - Use `run --separate-stderr` when the output is parsed (jq, `expect_output`):
   containers/storage logs warnings to stderr on some kernels.
-- The images have BusyBox `sh` only, no bash: commands inside the image run with
+- The images have BusyBox `sh` only, no Bash: commands inside the image run with
   `sh -c`.
 - Tests run on amd64 only, inside the single `build` job of `test.yaml`. arm64 is built
   and checked to be static, but not tested; do not add arm64 or separate test jobs. New
@@ -203,7 +203,7 @@ Conventions:
 
 - Work through pull requests; never push to `main`. Sign off every commit
   (`git commit -s`) for the DCO.
-- Keep skopeo, buildah and podman equal: same file names, workflow and step structure,
+- Keep skopeo, buildah and podman equal: same filenames, workflow and step structure,
   script interfaces and wording, differing only where the tool needs it. A change to
   one repository is ported to the other two, one pull request per repository. Each
   repository stays self-contained: no reusable workflows, composite actions or
@@ -218,9 +218,9 @@ Conventions:
   with a 7-day minimum release age and automerges everything but major updates.
 - Runners are `ubuntu-26.04`. zig is pinned in `mise.toml`; the Go version comes from
   the setup action, and an exception there needs a comment with the error it avoids.
-- The image is Alpine with BusyBox `sh`; do not add bash. The binary has no GPG
+- The image is Alpine with BusyBox `sh`; do not add Bash. The binary has no GPG
   signing (verification works), no libsubid and no NSS; these are accepted limitations
-  of a static musl build and documented in the README.
-- netavark is required at run time by recent buildah releases: the packages depend on
+  of a static musl build and documented in `README.md`.
+- netavark is required at runtime by recent buildah releases: the packages depend on
   it and the image ships Alpine's.
-- Keep README.md user-facing. Build internals, tests, workflows and rules belong here.
+- Keep `README.md` user-facing. Build internals, tests, workflows and rules belong here.
