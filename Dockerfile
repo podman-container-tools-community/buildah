@@ -32,14 +32,14 @@ touch /marker
 # allowed. netavark: recent buildah releases refuse to create containers without it, even
 # with host networking, which the image uses by default (packaging/image/containers.conf).
 # crun: OCI runtime for --isolation oci; chroot stays the default (BUILDAH_ISOLATION).
-# bash, curl, tzdata: scripts written for upstream's Fedora-based image.
+# curl, tzdata: scripts written for upstream's Fedora-based image.
 apk --root /rootfs --arch "${arch}" --no-cache --no-scripts add \
-  git shadow-subids fuse-overlayfs netavark crun bash curl tzdata
+  git shadow-subids fuse-overlayfs netavark crun curl tzdata
 
 # Unprivileged user for rootless builds, with its own storage volume. The subordinate ID
 # ranges are upstream's: they stay below 65536, so they also fit into a container that
 # only has 65536 IDs mapped (rootless Docker or podman, user namespace remapping).
-echo 'build:x:1000:1000:build:/home/build:/bin/bash' >> /rootfs/etc/passwd
+echo 'build:x:1000:1000:build:/home/build:/bin/sh' >> /rootfs/etc/passwd
 echo 'build:x:1000:' >> /rootfs/etc/group
 echo 'build:!::0:::::' >> /rootfs/etc/shadow
 printf 'root:1:65535\nbuild:1:999\nbuild:1001:64535\n' | tee -a /rootfs/etc/subuid >> /rootfs/etc/subgid
@@ -76,4 +76,4 @@ COPY $TARGETPLATFORM/buildah /usr/bin/buildah
 VOLUME ["/var/lib/containers", "/var/tmp", "/home/build/.local/share/containers"]
 # No entrypoint, like upstream's image: `docker run <image> buildah ...` and CI systems
 # that run a shell script in the image both work.
-CMD ["/bin/bash"]
+CMD ["/bin/sh"]

@@ -25,7 +25,7 @@ teardown_file() {
 
 # A shell command in a privileged container of the image, without overriding anything.
 in_image() {
-  docker run --rm --privileged -v "${WORK}/src:/src:ro" "${IMAGE}" bash -c "$1"
+  docker run --rm --privileged -v "${WORK}/src:/src:ro" "${IMAGE}" sh -c "$1"
 }
 
 # Builds the test Containerfile and prints the built image's /seccomp and /hello: RUN has

@@ -95,9 +95,9 @@ the container's own overlay. It contains containers-common's default `policy.jso
 everything), and its `registries.conf` resolves short names such as `alpine` on Docker Hub.
 Like upstream's image, it has no entrypoint, so commands start with `buildah`.
 
-The image is Alpine with the static binary, `bash`, `curl`, `tzdata`, `git` (build
-contexts from Git URLs), `newuidmap`/`newgidmap`, `fuse-overlayfs` and Alpine's
-`netavark` and `crun`. With `-e BUILDAH_ISOLATION=oci`, a privileged container can use
+The image is Alpine with the static binary, BusyBox `sh` (no `bash`), `curl`, `tzdata`,
+`git` (build contexts from Git URLs), `newuidmap`/`newgidmap`, `fuse-overlayfs` and
+Alpine's `netavark` and `crun`. With `-e BUILDAH_ISOLATION=oci`, a privileged container can use
 OCI isolation with host networking, the image's default; private networks need a newer
 netavark than Alpine's with recent buildah releases. Alpine's own buildah and
 containers-common packages are not installed (`apk add buildah` would replace the
