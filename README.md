@@ -255,6 +255,11 @@ this means:
   packages recommend the distribution's package that owns it
   (`golang-github-containers-common` on Debian and Ubuntu, `containers-common` on rpm
   distributions); the image ships `policy.json`, `containers.conf` and `registries.conf`.
+- **The apt repository serves only the newest release.** Its sources point at
+  `releases/latest/download`, so once a new upstream release is published, the `.deb`
+  URLs in a cached index return 404 until `sudo apt update` runs (see
+  [apt](#apt-debian-ubuntu)). This is by design; there is no package pool with older
+  releases.
 - **Linux only**, `amd64` and `arm64`. The arm64 binary is cross-compiled and checked to
   be static, but its functional tests do not run: CI tests on amd64 only.
 
