@@ -182,6 +182,7 @@ release:
   header: |
     Community-maintained static build of [buildah {{ .Tag }}](https://github.com/podman-container-tools/buildah/releases/tag/{{ .Tag }}).
     Not an official release of the buildah project.
+    Built by the pipeline at [{{ envOrDefault "GITHUB_REPOSITORY" "podman-container-tools-community/buildah" }}@{{ envOrDefault "PIPELINE_COMMIT" "main" }}](https://github.com/{{ envOrDefault "GITHUB_REPOSITORY" "podman-container-tools-community/buildah" }}/commit/{{ envOrDefault "PIPELINE_COMMIT" "main" }}); the release's Git tag only anchors the release.
 
     Linked statically against musl (Alpine) with tags `seccomp apparmor systemd containers_image_openpgp exclude_graphdriver_btrfs exclude_graphdriver_devicemapper`.
     Known limitations: no GPG signing (`--sign-by`), no libsubid (NSS subordinate IDs), no btrfs driver; netavark has to be installed.
