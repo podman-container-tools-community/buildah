@@ -66,6 +66,10 @@ mise.toml, mise.lock                 zig, goreleaser, syft, cosign and bats, ins
   `README.md`) cannot be built from the module proxy, which ignores them. The setup action
   detects them and switches to a copy of the configuration with `proxy: false`, which
   builds from the checkout and its `vendor/` directory.
+- Before goreleaser runs, the setup action downloads the modules with `go mod download`
+  and retries it up to five times, because proxy.golang.org sometimes cuts a download off
+  and neither go build nor goreleaser (which retries only its `go get`, on a 404) retries
+  that. goreleaser then finds the modules in the module cache.
 - buildah needs cgo: rootless re-execution into a user namespace, chroot isolation and
   seccomp are C code. A `CGO_ENABLED=0` build compiles, but rootless commands re-execute
   themselves endlessly and `RUN` steps run without seccomp. So both architectures are
