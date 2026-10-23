@@ -63,6 +63,9 @@ EOF
 FROM base
 ARG TARGETPLATFORM
 ENV BUILDAH_ISOLATION=chroot
+# Podman reads this label and runs the container with exactly these capabilities, the
+# ones chroot isolation needs; same list as upstream's image.
+LABEL io.containers.capabilities="CHOWN,DAC_OVERRIDE,FOWNER,FSETID,KILL,NET_BIND_SERVICE,SETFCAP,SETGID,SETPCAP,SETUID,SYS_CHROOT"
 COPY --from=delta /delta/ /
 COPY packaging/image/policy.json packaging/image/containers.conf \
   packaging/image/registries.conf packaging/image/storage.conf /etc/containers/

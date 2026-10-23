@@ -33,6 +33,12 @@ in_image() {
 # shellcheck disable=SC2016 # expanded by the shell in the image
 check='c="$(buildah from localhost/built)" && buildah run "$c" -- cat /seccomp /hello'
 
+@test "capabilities label as in upstream's image" {
+  run -0 --separate-stderr docker image inspect "${IMAGE}" \
+    --format '{{index .Config.Labels "io.containers.capabilities"}}'
+  [[ "${output}" == 'CHOWN,'*',SYS_CHROOT' ]]
+}
+
 @test "buildah is the command, not the entrypoint" {
   run -0 --separate-stderr docker run --rm "${IMAGE}" buildah --version
   [[ "${output}" == 'buildah version '* ]]
