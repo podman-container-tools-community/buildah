@@ -119,7 +119,7 @@ compiled from Go:
   verified against the Go checksum database (`sum.golang.org`), using
   [goreleaser verifiable builds](https://goreleaser.com/customization/builds/verifiable_builds/).
   Dependencies and their hashes are upstream's own `go.sum`.
-- Exception: releases whose `go.mod` has `replace` directives (1.26.0 to 1.26.9, 1.27.0
+- Exception: releases whose `go.mod` has `replace` directives (1.26.3 to 1.26.9, 1.27.0
   to 1.27.6, 1.28, 1.29.0 to 1.29.5, 1.30 and 1.35 to 1.37) cannot be built from the
   module proxy, which ignores those directives. They are built from the upstream Git
   checkout at the release tag and its `vendor/` directory, unmodified; the binary
@@ -145,10 +145,11 @@ compiled from Go:
 ## Which versions are released
 
 Every upstream [GitHub release](https://github.com/podman-container-tools/buildah/releases)
-since `v1.26.0`, drafts and prereleases excluded
-([`hack/upstream-releases.sh`](hack/upstream-releases.sh)). Upstream maintains several
-minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41 all had patch releases in
-2026), so there is no version list to maintain here.
+since `v1.26.3`, drafts and prereleases excluded
+([`hack/upstream-releases.sh`](hack/upstream-releases.sh)); 1.26.0 to 1.26.2 are left out
+because they vendor a libseccomp-golang that does not compile against libseccomp 2.6.
+Upstream maintains several minor versions at once (1.26, 1.29, 1.33, 1.37, 1.39 and 1.41
+all had patch releases in 2026), so there is no version list to maintain here.
 
 ## Release flow
 

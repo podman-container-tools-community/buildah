@@ -7,7 +7,9 @@
 set -euo pipefail
 
 UPSTREAM="${UPSTREAM:-podman-container-tools/buildah}"
-MIN_VERSION="${MIN_VERSION:-v1.26.0}"
+# v1.26.0 to v1.26.2 vendor a libseccomp-golang snapshot from before v0.10.0, which does
+# not compile against libseccomp 2.6 (duplicate case C_ACT_KILL_THREAD); v1.26.3 updated it.
+MIN_VERSION="${MIN_VERSION:-v1.26.3}"
 
 # True if $1 sorts before or equal to $2 as a version.
 version_le() {
