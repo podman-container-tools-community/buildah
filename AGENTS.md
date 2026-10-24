@@ -175,10 +175,12 @@ Conventions:
   or was cancelled. Keep it that way; do not make it run always.
 - [`sync.yaml`](.github/workflows/sync.yaml) runs every 6 hours, on every push to `main`
   and on demand. For every upstream release (from
-  [`hack/upstream-releases.sh`](hack/upstream-releases.sh), `v1.26.0` and newer) that has
-  no published release here yet, it creates the tag on the repository's first commit
-  (if missing) and dispatches [`release.yaml`](.github/workflows/release.yaml) on `main`
-  with the version as input, newest first, at most `MAX_RELEASES_PER_RUN` per run
+  [`hack/upstream-releases.sh`](hack/upstream-releases.sh), `v1.26.3` and newer: 1.26.0
+  to 1.26.2 vendor a libseccomp-golang older than v0.10.0, which does not compile against
+  libseccomp 2.6) that has no published release here yet, it creates the tag on the
+  repository's first commit (if missing) and dispatches
+  [`release.yaml`](.github/workflows/release.yaml) on `main` with the version as input,
+  newest first, at most `MAX_RELEASES_PER_RUN` per run
   (repository variable, default 10). Only a 404 counts as "no release" or "no tag"; any
   other API error stops the run, so a flaky API never starts a second release.
 - `release.yaml` runs on `main` only (it fails on any other ref, before the build) and
