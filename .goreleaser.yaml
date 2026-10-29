@@ -14,7 +14,8 @@
 # SYSROOT holds the C headers and static libraries for both architectures
 # (hack/build-sysroot.sh). The image is built separately by hack/build-image.sh.
 # GPG_KEY_PATH names the GPG private key that signs the deb and rpm packages; unset
-# means unsigned. IS_LATEST=true marks the newest upstream release.
+# means unsigned. The release stays a draft: release.yaml's publish job publishes it and
+# decides whether it becomes GitHub's latest release.
 version: 2
 
 project_name: buildah
@@ -177,7 +178,7 @@ release:
   github:
     owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: '{{ envOrDefault "GITHUB_REPOSITORY_NAME" .ProjectName }}'
-  make_latest: '{{ eq (envOrDefault "IS_LATEST" "false") "true" }}'
+  make_latest: "false"
   prerelease: auto
   header: |
     Community-maintained static build of [buildah {{ .Tag }}](https://github.com/podman-container-tools/buildah/releases/tag/{{ .Tag }}).
