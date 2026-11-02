@@ -153,6 +153,10 @@ case "${mode}" in
       exit 1
     fi
   fi
+  # Expose the exact pushed manifest-list digest for GitHub provenance.
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "digest=${digest}" >>"${GITHUB_OUTPUT}"
+  fi
   echo "${target}@${digest}"
   ;;
 *)
