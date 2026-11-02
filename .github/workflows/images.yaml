@@ -123,8 +123,8 @@ jobs:
       - name: Test the image
         run: hack/image-test.sh release
 
-      - id: push
-- name: Push and sign images
+      - name: Push and sign images
+        id: push
         env:
           IMMUTABLE: ${{ inputs.immutable }}
         run: hack/build-image.sh --push release "ghcr.io/${GITHUB_REPOSITORY}"
