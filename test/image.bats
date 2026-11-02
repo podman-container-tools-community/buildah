@@ -39,6 +39,15 @@ check='c="$(buildah from localhost/built)" && buildah run "$c" -- cat /seccomp /
   [[ "${output}" == 'CHOWN,'*',SYS_CHROOT' ]]
 }
 
+# hack/generate-sbom.sh; releases built before it have none.
+@test "SBOM of the static C libraries" {
+  run -0 --separate-stderr docker run --rm "${IMAGE}" sh -c \
+    'cat /usr/share/sbom/buildah/static-libraries.spdx.json 2>/dev/null || echo none'
+  [[ "${output}" != none ]] || skip "release without static-libraries.spdx.json"
+  [[ "${output}" == *'"name": "musl"'* ]]
+  [[ "${output}" == *'"name": "libseccomp"'* ]]
+}
+
 @test "buildah is the command, not the entrypoint" {
   run -0 --separate-stderr docker run --rm "${IMAGE}" buildah --version
   [[ "${output}" == 'buildah version '* ]]

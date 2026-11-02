@@ -4,8 +4,9 @@
 #   hack/build-image.sh --push <dist dir|release dir> <image>
 # <dist dir> is goreleaser's dist/ (binaries in <name>_linux_<arch>_*/); a <release dir>
 # holds a release's <name>_<version>_linux_<arch>.tar.gz archives instead (rebuild.yaml).
-# The build context is linux/<arch>/<binary> plus packaging/image/. Every architecture
-# found is built (no emulation needed); --load loads the host's as <local tag>.
+# The build context is linux/<arch>/<binary>, sbom/linux/<arch>/ and packaging/image/.
+# Every architecture found is built (no emulation needed); --load loads the host's as
+# <local tag>.
 # --push pushes all of them to <image> with the tags for VERSION: vX.Y.Z, vX.Y if it is
 # the newest upstream release of its minor, vX and latest if it is the newest upstream
 # release (hack/upstream-releases.sh, asked right before the push), then signs the
@@ -19,6 +20,7 @@ set -euo pipefail
 
 NAME=buildah
 BINARIES=(buildah)
+SBOM=static-libraries.spdx.json
 UPSTREAM=podman-container-tools/buildah
 
 mode="$1"
@@ -56,6 +58,15 @@ for arch in amd64 arm64; do
       exit 1
     fi
     tar -xzf "${src}/${archive}" -C "${dir}" "${BINARIES[@]}"
+  fi
+  # The C libraries in the binaries (hack/generate-sbom.sh), for BuildKit's SBOM scanner,
+  # which merges SPDX files it finds in the image. Releases before it have none.
+  sbom="${ctx}/sbom/linux/${arch}"
+  mkdir -p "${sbom}"
+  if [[ -f "${src}/metadata.json" ]]; then
+    [[ ! -f "${repo}/generated/${SBOM}" ]] || cp "${repo}/generated/${SBOM}" "${sbom}/"
+  elif tar -tzf "${src}/${archive}" | grep -x "${SBOM}" >/dev/null; then
+    tar -xzf "${src}/${archive}" -C "${sbom}" "${SBOM}"
   fi
   if [[ "$(find "${dir}" -type f | wc -l)" -eq "${#BINARIES[@]}" ]]; then
     platforms+=("linux/${arch}")
