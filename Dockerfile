@@ -71,6 +71,8 @@ COPY packaging/image/policy.json packaging/image/containers.conf \
   packaging/image/registries.conf packaging/image/storage.conf /etc/containers/
 COPY --chown=1000:1000 packaging/image/storage-rootless.conf /home/build/.config/containers/storage.conf
 COPY $TARGETPLATFORM/buildah /usr/bin/buildah
+# The C libraries in buildah, for the image SBOM (hack/generate-sbom.sh)
+COPY sbom/$TARGETPLATFORM/ /usr/share/sbom/buildah/
 # Storage and buildah's temporary overlays (build context) need a file system that is
 # not the image's overlay.
 VOLUME ["/var/lib/containers", "/var/tmp", "/home/build/.local/share/containers"]
