@@ -1,0 +1,3 @@
+[codespell]
+# passt is the user-mode networking tool (pasta) for rootless RUN with a private network.
+ignore-words-list = passt
