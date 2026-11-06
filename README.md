@@ -56,10 +56,10 @@ buildah update. To go back to the distribution's package, remove the source and 
 
 The package depends on the distribution's package with `/etc/containers`
 (`golang-github-containers-common` or `containers-common`), because buildah refuses to
-pull without its `policy.json`. It recommends `netavark` (see
-[Limitations](#limitations)), an OCI runtime (`crun` or `runc`), `uidmap` and
-`fuse-overlayfs`. Ubuntu 22.04 has no netavark package, so buildah 1.44 and newer cannot
-create containers there.
+pull without its `policy.json`, and on `netavark` (see [Limitations](#limitations)). It
+recommends an OCI runtime (`crun` or `runc`), `uidmap`, `fuse-overlayfs` and `passt`
+(`pasta`, rootless networking for `RUN` with a private network). Ubuntu 22.04 has no
+netavark package, so buildah 1.44 and newer cannot be installed there.
 
 ### rpm (Fedora, RHEL, openSUSE)
 
@@ -267,7 +267,7 @@ this means:
   resolution uses musl's resolver (`/etc/hosts` and DNS): no LDAP users, mDNS
   (`.local`) or systemd-resolved specific behaviour.
 - **No default configuration.** The binary does not install `/etc/containers`. The
-  packages recommend the distribution's package that owns it
+  packages depend on the distribution's package that owns it
   (`golang-github-containers-common` on Debian and Ubuntu, `containers-common` on rpm
   distributions); the image ships `policy.json`, `containers.conf` and `registries.conf`.
 - **The apt repository serves only the newest release.** Its sources point at
