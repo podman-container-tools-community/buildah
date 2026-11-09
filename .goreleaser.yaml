@@ -112,6 +112,8 @@ archives:
 # Releases since 1.44 refuse to create containers without netavark, even with host
 # networking, so it is a dependency (Ubuntu 22.04, which has no netavark package, cannot
 # install these packages; Debian 12, Ubuntu 24.04 and the rpm distributions can).
+# passt provides pasta, the default rootless network command (containers.conf
+# rootless_network_cmd) for RUN with a private network; slirp4netns is not needed.
 nfpms:
   - id: buildah
     ids: [buildah]
@@ -151,6 +153,7 @@ nfpms:
           - crun | runc
           - uidmap
           - fuse-overlayfs
+          - passt
       rpm:
         dependencies:
           - containers-common
@@ -159,6 +162,7 @@ nfpms:
           - (crun or runc)
           - shadow-utils
           - fuse-overlayfs
+          - passt
     mtime: "{{ .CommitDate }}"
 
 checksum:
